@@ -1,0 +1,44 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap");
+@import "leaflet/dist/leaflet.css";
+@import "tailwindcss";
+
+@theme {
+	--font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+	--font-display: "Plus Jakarta Sans", "Inter", ui-sans-serif, sans-serif;
+
+	--color-brand-50: #eaf6ff;
+	--color-brand-100: #d3ecff;
+	--color-brand-200: #b0deff;
+	--color-brand-300: #8fd3ff;
+	--color-brand-400: #4ea3ff;
+	--color-brand-500: #2f8af0;
+	--color-brand-600: #1d6fd1;
+	--color-brand-700: #175cad;
+
+	--color-ink-900: #0b1220;
+	--color-ink-700: #333f58;
+	--color-ink-500: #667085;
+	--color-ink-300: #aeb8c7;
+	--color-ink-100: #eef2f7;
+
+	--color-alert-50: #fff7e6;
+	--color-alert-500: #f5a524;
+
+	--color-danger-50: #fef0f0;
+	--color-danger-500: #ef4444;
+}
+
+@keyframes cermat-ping {
+	0% {
+		transform: scale(0.6);
+		opacity: 0.7;
+	}
+	100% {
+		transform: scale(2.2);
+		opacity: 0;
+	}
+}
+
+.cermat-ping {
+	animation: cermat-ping 2s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
+}
