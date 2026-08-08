@@ -9,8 +9,6 @@ import {
 	Clock,
 	Compass,
 	ArrowLeft,
-	ShieldCheck,
-	AlertTriangle,
 	Navigation as NavIcon,
 	Wifi,
 	Battery,
@@ -19,12 +17,7 @@ import {
 	Route as RouteIcon,
 } from "lucide-react";
 import L from "leaflet";
-import {
-	MapContainer,
-	Marker,
-	Polyline,
-	TileLayer,
-} from "react-leaflet";
+import { MapContainer, Marker, Polyline, TileLayer } from "react-leaflet";
 
 import LocationAutocomplete, {
 	formatCoord,
@@ -220,8 +213,7 @@ export default function Navigation() {
 		routeData?.routes[0] ??
 		null;
 
-	// Hitung indeks titik rute terdekat dari lokasi Fake GPS
-	const { passedPoints, remainingPoints } = useMemo(() => {
+	const { passedPoints, remainingPoints, currentGuidanceIndex } = useMemo(() => {
 		if (!activeRoute || !activeRoute.points || activeRoute.points.length === 0) {
 			return { passedPoints: [], remainingPoints: [], currentGuidanceIndex: 0 };
 		}
@@ -235,7 +227,7 @@ export default function Navigation() {
 			};
 		}
 
-		// Cari titik pada rute yang paling dekat dengan posisi user saat ini
+		// 1. Cari titik rute terdekat dari lokasi user
 		let closestIndex = 0;
 		let minDistance = Infinity;
 
@@ -247,20 +239,26 @@ export default function Navigation() {
 			}
 		});
 
-		// Potong rute menjadi yang sudah dilewati & yang belum
 		const passed = activeRoute.points.slice(0, closestIndex + 1);
 		const remaining = activeRoute.points.slice(closestIndex);
 
-		// Cari petunjuk arah (guidance) mana yang sedang/akan dihadapi
+		// 2. Cari instruksi berikutnya berdasarkan jarak lokasi user ke titik instruksi (step.point)
 		let guidanceIdx = 0;
 		if (activeRoute.guidance && activeRoute.guidance.length > 0) {
 			let minGuidanceDist = Infinity;
+
 			activeRoute.guidance.forEach((g, gIdx) => {
-				if (g.point) {
+				if (
+					g.point &&
+					typeof g.point.lat === "number" &&
+					typeof g.point.lng === "number"
+				) {
 					const dist = getDistanceMeters(
 						[userPos[0], userPos[1]],
 						[g.point.lat, g.point.lng],
 					);
+
+					// Pilih instruksi terdekat yang ada di depan/di area lokasi user
 					if (dist < minGuidanceDist) {
 						minGuidanceDist = dist;
 						guidanceIdx = gIdx;
@@ -522,27 +520,28 @@ export default function Navigation() {
 
 								<div className="flex flex-1 flex-col justify-between overflow-hidden px-5 pb-5">
 									<div className="flex flex-col overflow-hidden">
-										{activeRoute && (
-											<div className="mb-2">
-												<div className="flex items-center justify-between">
-													<div className="flex items-baseline gap-2">
-														<span className="text-2xl font-extrabold tracking-tight text-slate-900">
-															{Math.round(activeRoute.travel_time_in_seconds / 60)} mnt
-														</span>
-														<span className="text-xs font-semibold text-slate-400">
-															({(activeRoute.length_in_meters / 1000).toFixed(1)} km)
-														</span>
-													</div>
+										{/* FLOATING ACTIVE MANEUVER CARD (Muncul saat rute aktif & mode navigasi) */}
+										{activeRoute && activeRoute.guidance?.[currentGuidanceIndex] && (
+											<div className="absolute top-20 left-4 right-4 z-[1000] rounded-2xl bg-blue-600 p-4 text-white shadow-xl flex items-center gap-4 transition-all duration-300">
+												<div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/20 backdrop-blur-md">
+													<ManeuverIcon
+														maneuver={activeRoute.guidance[currentGuidanceIndex].maneuver}
+														size={28}
+														className="text-white"
+													/>
+												</div>
 
-													{activeRoute.floods.length === 0 ? (
-														<span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-700">
-															<ShieldCheck size={14} /> Bebas Banjir
-														</span>
-													) : (
-														<span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-extrabold text-amber-800">
-															<AlertTriangle size={14} /> {activeRoute.floods.length} Titik
-															Banjir
-														</span>
+												<div className="flex-1 min-w-0">
+													<p className="text-[11px] font-bold uppercase tracking-wider text-blue-100">
+														Petunjuk Selanjutnya
+													</p>
+													<h3 className="text-sm font-extrabold truncate leading-tight">
+														{activeRoute.guidance[currentGuidanceIndex].message}
+													</h3>
+													{activeRoute.guidance[currentGuidanceIndex].street && (
+														<p className="text-xs text-blue-100/90 truncate">
+															Ke {activeRoute.guidance[currentGuidanceIndex].street}
+														</p>
 													)}
 												</div>
 											</div>
@@ -651,42 +650,73 @@ export default function Navigation() {
 											{activeTab === "instructions" && (
 												<div className="py-1">
 													{activeRoute?.guidance && activeRoute.guidance.length > 0 ? (
-														<div className="relative border-l-2 border-slate-200 ml-4 space-y-5 my-2">
-															{activeRoute.guidance.map((step, idx) => (
-																<div key={idx} className="relative pl-6">
-																	{/* Line Bullet Node */}
-																	<div className="absolute -left-[17px] top-0 flex h-8 w-8 items-center justify-center rounded-full bg-white border border-slate-200 shadow-sm">
-																		<ManeuverIcon maneuver={step.maneuver} size={16} />
-																	</div>
+														<div className="relative border-l-2 border-slate-200 ml-4 space-y-4 my-2 pr-2">
+															{activeRoute.guidance.map((step, idx) => {
+																const isCurrentStep = idx === currentGuidanceIndex;
+																const isPassedStep = idx < currentGuidanceIndex;
 
-																	<div>
-																		<h4 className="text-xs font-extrabold text-slate-900 leading-tight">
-																			{step.message}
-																		</h4>
-																		{step.street && (
-																			<p className="text-[11px] font-medium text-slate-500 mt-0.5">
-																				Ke {step.street}
-																			</p>
-																		)}
-																		{step.route_offset_in_meters !== undefined && (
-																			<span className="mt-1 inline-block text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-																				{step.route_offset_in_meters >= 1000
-																					? `${(step.route_offset_in_meters / 1000).toFixed(1)} km`
-																					: `${step.route_offset_in_meters} m`}
-																			</span>
-																		)}
+																return (
+																	<div
+																		key={idx}
+																		className={`relative pl-6 transition-all duration-300 ${
+																			isPassedStep ? "opacity-40" : "opacity-100"
+																		}`}>
+																		{/* Line Bullet Node */}
+																		<div
+																			className={`absolute -left-[17px] top-0 flex h-8 w-8 items-center justify-center rounded-full border transition-all ${
+																				isCurrentStep
+																					? "bg-blue-600 border-blue-600 text-white shadow-md ring-4 ring-blue-100 scale-110"
+																					: "bg-white border-slate-200 text-slate-700"
+																			}`}>
+																			<ManeuverIcon
+																				maneuver={step.maneuver}
+																				size={16}
+																				className={isCurrentStep ? "text-white" : "text-slate-700"}
+																			/>
+																		</div>
+
+																		{/* Card Instruction */}
+																		<div
+																			className={`rounded-xl p-2.5 transition-all ${
+																				isCurrentStep
+																					? "bg-blue-50/80 border border-blue-200 shadow-sm"
+																					: "bg-transparent"
+																			}`}>
+																			<div className="flex items-center justify-between gap-2">
+																				<h4
+																					className={`text-xs leading-tight ${
+																						isCurrentStep
+																							? "font-black text-blue-700"
+																							: "font-extrabold text-slate-900"
+																					}`}>
+																					{step.message}
+																				</h4>
+																				{isCurrentStep && (
+																					<span className="shrink-0 rounded-full bg-blue-600 px-2 py-0.5 text-[9px] font-extrabold uppercase text-white">
+																						Aktif
+																					</span>
+																				)}
+																			</div>
+
+																			{step.street && (
+																				<p className="text-[11px] font-medium text-slate-500 mt-0.5">
+																					Ke {step.street}
+																				</p>
+																			)}
+
+																			{step.route_offset_in_meters !== undefined && (
+																				<span className="mt-1 inline-block text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+																					{step.route_offset_in_meters >= 1000
+																						? `${(step.route_offset_in_meters / 1000).toFixed(1)} km`
+																						: `${step.route_offset_in_meters} m`}
+																				</span>
+																			)}
+																		</div>
 																	</div>
-																</div>
-															))}
+																);
+															})}
 														</div>
-													) : (
-														<div className="flex flex-col items-center justify-center py-6 text-center text-slate-400">
-															<ListOrdered size={28} className="mb-2 text-slate-300" />
-															<p className="text-xs font-medium">
-																Petunjuk arah tidak tersedia untuk rute ini.
-															</p>
-														</div>
-													)}
+													) : null}
 												</div>
 											)}
 										</div>
