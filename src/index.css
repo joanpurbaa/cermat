@@ -28,6 +28,42 @@
 	--color-danger-500: #ef4444;
 }
 
+html,
+body,
+#root {
+	min-height: 100%;
+}
+
+html {
+	background: #ffffff;
+}
+
+body {
+	margin: 0;
+	background: #ffffff;
+	font-family: var(--font-sans);
+	-webkit-font-smoothing: antialiased;
+}
+
+::selection {
+	background: var(--color-brand-200);
+	color: var(--color-ink-900);
+}
+
+* {
+	box-sizing: border-box;
+}
+
+.leaflet-control-zoom {
+	border: 0 !important;
+	box-shadow: 0 8px 20px rgba(11, 18, 32, 0.14) !important;
+}
+
+.leaflet-control-zoom a {
+	color: var(--color-ink-700) !important;
+	border-color: var(--color-ink-100) !important;
+}
+
 @keyframes cermat-ping {
 	0% {
 		transform: scale(0.6);

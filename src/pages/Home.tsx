@@ -82,6 +82,7 @@ export default function Home() {
 		url: string;
 	} | null>(null);
 
+	// eslint-disable-next-line react-hooks/set-state-in-effect -- synchronize route lookup state with coordinates
 	useEffect(() => {
 		if (!originCoords || !destCoords) return;
 		let cancelled = false;
@@ -132,37 +133,41 @@ export default function Home() {
 		routeData?.routes[0] ??
 		null;
 
-	const sheetHeight = expanded ? 460 : activeRoute ? 260 : 190;
+	const sheetHeight = expanded ? 500 : activeRoute ? 286 : 206;
 	const center = useMemo<LatLon>(
 		() => originCoords || [-6.9667, 110.4167],
 		[originCoords],
 	);
 
 	return (
-		<main className="mx-auto flex h-screen w-[500px] flex-col overflow-hidden">
+		<main className="mx-auto flex h-[100dvh] w-full max-w-[560px] flex-col overflow-hidden bg-white shadow-xl sm:border-x sm:border-ink-100">
 			<div
-				className="relative z-[1000] bg-gradient-to-b from-brand-50 to-white px-8 pt-8 pb-6"
+				className="relative z-[1000] bg-gradient-to-b from-brand-50 to-white px-5 pb-5 pt-5 sm:px-7 sm:pt-7"
 				onPaste={handleHeaderPaste}>
 				<BackButton title="Rute" />
 
-				<LocationAutocomplete
-					className="mt-7 relative z-[20]"
-					placeholder="Lokasi berangkat kamu"
-					Icon={ArrowDown}
-					onSelect={(coords) => setOriginCoords(coords)}
-					externalValue={originExternal}
-				/>
+				<div className="mt-5 flex flex-col gap-2.5">
+					<LocationAutocomplete
+						className="relative z-[20]"
+						placeholder="Lokasi berangkat kamu"
+						Icon={ArrowDown}
+						onSelect={(coords) => setOriginCoords(coords)}
+						externalValue={originExternal}
+					/>
 
-				<LocationAutocomplete
-					className="mt-3 relative z-[10]"
-					placeholder="Titik tujuan kamu"
-					Icon={MapPin}
-					onSelect={(coords) => setDestCoords(coords)}
-					externalValue={destExternal}
-				/>
+					<LocationAutocomplete
+						className="relative z-[10]"
+						placeholder="Titik tujuan kamu"
+						Icon={MapPin}
+						onSelect={(coords) => setDestCoords(coords)}
+						externalValue={destExternal}
+					/>
+				</div>
 
 				{error && (
-					<p className="mt-3 text-sm font-medium text-danger-500">{error}</p>
+					<div role="alert" className="mt-3 rounded-xl bg-danger-50 px-3 py-2 text-sm font-medium text-danger-500">
+						{error}
+					</div>
 				)}
 			</div>
 
@@ -193,38 +198,47 @@ export default function Home() {
 			</div>
 
 			<div
-				className="relative z-10 shrink-0 overflow-hidden rounded-t-[28px] bg-white shadow-[0_-8px_30px_rgba(11,18,32,0.1)] transition-all duration-300"
+				className="relative z-10 shrink-0 overflow-hidden rounded-t-[30px] bg-white shadow-[0_-10px_32px_rgba(11,18,32,0.12)] transition-all duration-300"
 				style={{ height: sheetHeight }}>
 				<button
+					type="button"
+					aria-label={expanded ? "Ciutkan detail rute" : "Lihat detail rute"}
 					onClick={() => setExpanded(!expanded)}
-					className="flex w-full items-center justify-center py-3">
+					className="flex w-full items-center justify-center py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500">
 					<div className="h-1.5 w-12 rounded-full bg-ink-300" />
 				</button>
 
 				<div
-					className="overflow-y-auto px-8 pb-8"
+					className="overflow-y-auto px-5 pb-8 sm:px-7"
 					style={{ height: sheetHeight - 48 }}>
 					{loading && (
-						<div className="flex items-center gap-3 text-ink-500">
-							<LoaderCircle size={18} className="animate-spin text-brand-500" />
-							<p className="text-sm">Mencari rute teraman dari banjir...</p>
+						<div className="flex items-center gap-3 rounded-2xl bg-brand-50 px-4 py-4 text-ink-700" role="status">
+							<LoaderCircle size={20} className="animate-spin text-brand-500" />
+							<p className="text-sm font-medium">Mencari rute teraman dari banjir...</p>
 						</div>
 					)}
 
 					{!loading && !activeRoute && (
-						<p className="text-sm text-ink-500">
-							Masukkan lokasi berangkat dan tujuan untuk melihat rute tercepat.
-						</p>
+						<div className="rounded-2xl bg-ink-100/70 px-4 py-4">
+							<p className="text-sm font-medium leading-6 text-ink-700">
+								Masukkan lokasi berangkat dan tujuan untuk melihat rute tercepat.
+							</p>
+						</div>
 					)}
 
 					{!loading && activeRoute && (
 						<>
-							<p className="font-display text-lg font-bold text-ink-900">
-								{Math.round(activeRoute.travel_time_in_seconds / 60)} menit{" "}
-								<span className="font-medium text-ink-500">
-									&middot; {(activeRoute.length_in_meters / 1000).toFixed(1)} km
-								</span>
-							</p>
+							<div className="mb-4 flex items-end justify-between gap-4">
+								<div>
+									<p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-400">Rute terpilih</p>
+									<p className="mt-1 font-display text-2xl font-extrabold tracking-tight text-ink-900">
+										{Math.round(activeRoute.travel_time_in_seconds / 60)} menit
+									</p>
+								</div>
+								<p className="pb-0.5 text-sm font-semibold text-ink-500">
+									{(activeRoute.length_in_meters / 1000).toFixed(1)} km
+								</p>
+							</div>
 
 							{activeRoute.floods.length === 0 ? (
 								<div className="mt-4 rounded-2xl bg-brand-50 px-4 py-3">
@@ -236,24 +250,26 @@ export default function Home() {
 								activeRoute.floods.map((flood, i) => (
 									<div
 										key={`${flood.name}-${i}`}
-										className="mt-3 flex items-start gap-3 rounded-2xl bg-alert-50 px-4 py-3">
-										<Megaphone size={20} className="mt-0.5 shrink-0 text-alert-500" />
+										className="mt-3 flex items-start gap-3 rounded-2xl bg-alert-50 px-4 py-4">
+										<div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/80">
+											<Megaphone aria-hidden="true" size={18} className="text-alert-500" />
+										</div>
 										<div className="min-w-0 flex-1">
-											<p className="text-sm text-ink-900">
-												<span className="font-display font-semibold">Banjir</span> di{" "}
-												{flood.name}{" "}
-												<span className="text-ink-500">
-													({Math.round(flood.flood_confidence * 100)}% yakin)
-												</span>
+											<p className="text-[15px] leading-6 text-ink-900">
+												<span className="font-display font-bold">Banjir</span> di {flood.name}
+											</p>
+											<p className="mt-0.5 text-sm font-medium text-ink-500">
+												{Math.round(flood.flood_confidence * 100)}% tingkat keyakinan
 											</p>
 											{flood.stream_url && (
 												<button
+													type="button"
 													onClick={() =>
 														setActiveCctv({ name: flood.name, url: flood.stream_url! })
 													}
-													className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-alert-500 px-3 py-1.5 text-xs font-semibold text-white">
-													<Video size={14} />
-													Lihat CCTV Langsung
+													className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl bg-alert-500 px-4 py-2 text-sm font-bold text-white shadow-sm transition-transform hover:bg-alert-500/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-alert-500 focus-visible:ring-offset-2">
+													<Video aria-hidden="true" size={16} />
+													Lihat CCTV langsung
 												</button>
 											)}
 										</div>
@@ -262,33 +278,44 @@ export default function Home() {
 							)}
 
 							{routeData && routeData.routes.length > 1 && (
-								<div className="mt-7">
-									<p className="text-xs font-semibold uppercase tracking-wide text-ink-400">
-										Pilihan rute lain
-									</p>
+								<div className="mt-8">
+									<div className="flex items-end justify-between gap-4">
+										<div>
+											<p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-400">
+												Pilihan rute lain
+											</p>
+											<p className="mt-1 text-sm text-ink-500">Bandingkan keamanan dan waktu tempuh</p>
+										</div>
+									</div>
 									<div className="mt-3 flex flex-col gap-2">
 										{routeData.routes.map((r) => (
-											<button
-												key={r.index}
-												onClick={() => setSelectedIndex(r.index)}
-												className={`flex items-center justify-between rounded-xl border px-4 py-3 text-left text-sm transition-colors ${
-													r.index === selectedIndex
-														? "border-brand-500 bg-brand-50"
-														: "border-ink-200 bg-white"
-												}`}>
-												<span className="font-medium text-ink-900">
-													{Math.round(r.travel_time_in_seconds / 60)} menit ·{" "}
-													{(r.length_in_meters / 1000).toFixed(1)} km
-												</span>
-												<span
-													className={`text-xs font-semibold ${
-														r.floods.length === 0 ? "text-brand-500" : "text-alert-500"
-													}`}>
-													{r.floods.length === 0
-														? "Aman"
-														: `${r.floods.length} titik banjir`}
-												</span>
-											</button>
+														<button
+															type="button"
+															key={r.index}
+															aria-pressed={r.index === selectedIndex}
+															onClick={() => setSelectedIndex(r.index)}
+															className={`flex min-h-16 items-center justify-between gap-4 rounded-2xl border px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
+																r.index === selectedIndex
+																	? "border-brand-500 bg-brand-50 shadow-sm"
+																	: "border-ink-200 bg-white hover:border-brand-300"
+																}`}>
+																<span className="font-display text-sm font-bold text-ink-900">
+																	{Math.round(r.travel_time_in_seconds / 60)} menit{" "}
+																	<span className="font-medium text-ink-500">
+																		&middot; {(r.length_in_meters / 1000).toFixed(1)} km
+																	</span>
+																</span>
+																<span
+																	className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${
+																		r.floods.length === 0
+																		? "bg-brand-100 text-brand-700"
+																		: "bg-alert-50 text-alert-500"
+																	}`}>
+																	{r.floods.length === 0
+																		? "Aman"
+																		: `${r.floods.length} titik banjir`}
+																</span>
+															</button>
 										))}
 									</div>
 								</div>

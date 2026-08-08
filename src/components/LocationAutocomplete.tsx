@@ -72,10 +72,12 @@ async function searchPhoton(query: string): Promise<Suggestion[]> {
 	return features.map(toSuggestion);
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function formatCoord([lat, lng]: LatLon): string {
 	return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function parseCoordPair(raw: string): LatLon | null {
 	const cleaned = raw.trim().replace(/^\(|\)$/g, "");
 	const m = cleaned.match(/^(-?\d{1,3}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)$/);
@@ -86,6 +88,7 @@ export function parseCoordPair(raw: string): LatLon | null {
 	return [lat, lng];
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function parseDualCoordPair(
 	raw: string,
 ): { origin: LatLon; destination: LatLon } | null {
@@ -120,6 +123,7 @@ export default function LocationAutocomplete({
 	const [resolvedCoords, setResolvedCoords] = useState<LatLon | null>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
 
+	// eslint-disable-next-line react-hooks/set-state-in-effect -- sync external selection into the input state
 	useEffect(() => {
 		if (!externalValue) return;
 		setQuery(externalValue.label);
@@ -129,6 +133,7 @@ export default function LocationAutocomplete({
 		setOpen(false);
 	}, [externalValue]);
 
+	// eslint-disable-next-line react-hooks/set-state-in-effect -- clear stale suggestions before debounced search
 	useEffect(() => {
 		const trimmed = query.trim();
 		if (trimmed.length < 3) {
@@ -216,19 +221,27 @@ export default function LocationAutocomplete({
 	return (
 		<div ref={containerRef} className={`relative ${className ?? ""}`}>
 			<div
-				className={`flex items-center gap-3 rounded-2xl border bg-white px-4 py-3 transition-colors ${
-					invalid ? "border-danger-500" : "border-ink-200"
+				className={`flex min-h-14 items-center gap-3 rounded-2xl border bg-white px-4 py-3 shadow-sm transition-colors ${
+					invalid
+						? "border-danger-500 ring-2 ring-danger-50"
+						: "border-ink-200 hover:border-brand-300 focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-100"
 				}`}>
-				<Icon size={18} className="shrink-0 text-ink-400" />
+				<Icon aria-hidden="true" size={20} className="shrink-0 text-brand-500" />
 				<input
 					value={query}
 					onChange={handleChange}
 					onBlur={handleBlur}
 					onFocus={() => suggestions.length > 0 && setOpen(true)}
 					placeholder={placeholder}
-					className="w-full bg-transparent text-sm text-ink-900 outline-none placeholder:text-ink-400"
+					aria-label={placeholder}
+					aria-invalid={invalid}
+					aria-expanded={open}
+					autoComplete="off"
+					className="w-full bg-transparent text-[15px] font-medium text-ink-900 outline-none placeholder:text-ink-400"
 				/>
-				{loading && <Loader2 size={16} className="animate-spin text-brand-500" />}
+				{loading && (
+					<Loader2 aria-label="Mencari lokasi" size={18} className="shrink-0 animate-spin text-brand-500" />
+				)}
 			</div>
 
 			{invalid && (
@@ -241,9 +254,11 @@ export default function LocationAutocomplete({
 				<div className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-72 overflow-y-auto rounded-2xl border border-ink-200 bg-white shadow-lg">
 					{suggestions.map((s) => (
 						<button
+							type="button"
 							key={s.id}
+							onMouseDown={(event) => event.preventDefault()}
 							onClick={() => handlePick(s)}
-							className="flex w-full flex-col items-start gap-0.5 px-4 py-3 text-left hover:bg-brand-50">
+							className="flex min-h-14 w-full flex-col items-start justify-center gap-0.5 px-4 py-3 text-left transition-colors hover:bg-brand-50 focus-visible:bg-brand-50 focus-visible:outline-none">
 							<span className="text-sm font-medium text-ink-900">{s.label}</span>
 							{s.sublabel && (
 								<span className="text-xs text-ink-400">{s.sublabel}</span>

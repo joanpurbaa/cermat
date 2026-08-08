@@ -16,6 +16,11 @@ export default function CctvModal({
 	const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
 
 	useEffect(() => {
+		function handleKeyDown(event: KeyboardEvent) {
+			if (event.key === "Escape") onClose();
+		}
+		document.addEventListener("keydown", handleKeyDown);
+
 		let hls: import("hls.js").default | null = null;
 		const video = videoRef.current;
 		if (!video) return;
@@ -53,17 +58,27 @@ export default function CctvModal({
 		setup();
 
 		return () => {
+			document.removeEventListener("keydown", handleKeyDown);
 			hls?.destroy();
 		};
-	}, [streamUrl]);
+	}, [onClose, streamUrl]);
 
 	return (
-		<div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/70 px-6">
-			<div className="w-full max-w-md overflow-hidden rounded-2xl bg-ink-950">
-				<div className="flex items-center justify-between px-4 py-3">
-					<p className="text-sm font-semibold text-white">CCTV &middot; {name}</p>
-					<button onClick={onClose} className="rounded-full p-1 hover:bg-white/10">
-						<X size={18} className="text-white" />
+		<div
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="cctv-title"
+			onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+			className="fixed inset-0 z-[2000] flex items-center justify-center bg-ink-900/75 px-4 backdrop-blur-sm sm:px-6">
+			<div className="w-full max-w-md overflow-hidden rounded-3xl bg-ink-900 shadow-2xl">
+				<div className="flex items-center justify-between gap-4 px-5 py-4">
+					<p id="cctv-title" className="truncate text-sm font-bold text-white">CCTV &middot; {name}</p>
+					<button
+						type="button"
+						aria-label="Tutup CCTV"
+						onClick={onClose}
+						className="flex size-10 shrink-0 items-center justify-center rounded-full text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">
+						<X aria-hidden="true" size={20} />
 					</button>
 				</div>
 
