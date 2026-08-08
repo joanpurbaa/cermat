@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, MapPin, type LucideIcon } from "lucide-react";
+import { Loader2, type LucideIcon, Search } from "lucide-react";
 
 export type LatLon = [number, number];
 
@@ -43,20 +43,14 @@ async function searchPhoton(query: string): Promise<Suggestion[]> {
 		lat: String(SEMARANG_CENTER.lat),
 		lon: String(SEMARANG_CENTER.lon),
 		limit: "8",
-		// tanpa "lang" — Photon publik cuma support en/de/fr/it,
-		// "id" bikin request ke-reject diam-diam
 	};
 
-	// Percobaan 1: dibatasi bbox Semarang
 	const scoped = new URLSearchParams({ ...baseParams, bbox: SEMARANG_BBOX });
 	const res = await fetch(`https://photon.komoot.io/api/?${scoped}`);
 	if (!res.ok) throw new Error(`Photon error ${res.status}`);
 	const json = await res.json();
 	let features: PhotonFeature[] = json.features ?? [];
 
-	// Percobaan 2 (fallback): kalau bbox ketat gak nemu apa-apa,
-	// coba lagi tanpa bbox, cuma bias lokasi — lalu filter manual
-	// biar tetep prioritas area Semarang
 	if (features.length === 0) {
 		const wide = new URLSearchParams(baseParams);
 		const res2 = await fetch(`https://photon.komoot.io/api/?${wide}`);
@@ -72,10 +66,12 @@ async function searchPhoton(query: string): Promise<Suggestion[]> {
 	return features.map(toSuggestion);
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function formatCoord([lat, lng]: LatLon): string {
 	return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function parseCoordPair(raw: string): LatLon | null {
 	const cleaned = raw.trim().replace(/^\(|\)$/g, "");
 	const m = cleaned.match(/^(-?\d{1,3}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)$/);
@@ -86,6 +82,7 @@ export function parseCoordPair(raw: string): LatLon | null {
 	return [lat, lng];
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function parseDualCoordPair(
 	raw: string,
 ): { origin: LatLon; destination: LatLon } | null {
@@ -101,14 +98,16 @@ interface LocationAutocompleteProps {
 	className?: string;
 	placeholder?: string;
 	Icon?: LucideIcon;
-	onSelect: (coords: LatLon) => void;
+	onSelect: (
+		coords: LatLon,
+		item?: { name: string; [key: string]: any },
+	) => void;
 	externalValue?: { label: string; coords: LatLon } | null;
 }
 
 export default function LocationAutocomplete({
 	className,
 	placeholder,
-	Icon = MapPin,
 	onSelect,
 	externalValue,
 }: LocationAutocompleteProps) {
@@ -122,6 +121,7 @@ export default function LocationAutocomplete({
 
 	useEffect(() => {
 		if (!externalValue) return;
+		// eslint-disable-next-line react-hooks/set-state-in-effect
 		setQuery(externalValue.label);
 		setResolvedCoords(externalValue.coords);
 		setInvalid(false);
@@ -132,6 +132,7 @@ export default function LocationAutocomplete({
 	useEffect(() => {
 		const trimmed = query.trim();
 		if (trimmed.length < 3) {
+			// eslint-disable-next-line react-hooks/set-state-in-effect
 			setSuggestions([]);
 			return;
 		}
@@ -173,7 +174,6 @@ export default function LocationAutocomplete({
 			cancelled = true;
 			clearTimeout(timeout);
 		};
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [query]);
 
 	useEffect(() => {
@@ -216,37 +216,37 @@ export default function LocationAutocomplete({
 	return (
 		<div ref={containerRef} className={`relative ${className ?? ""}`}>
 			<div
-				className={`flex items-center gap-3 rounded-2xl border bg-white px-4 py-3 transition-colors ${
-					invalid ? "border-danger-500" : "border-ink-200"
+				className={`flex items-center gap-3 px-1 transition-colors ${
+					invalid ? "border-b border-danger-500" : ""
 				}`}>
-				<Icon size={18} className="shrink-0 text-ink-400" />
 				<input
 					value={query}
 					onChange={handleChange}
 					onBlur={handleBlur}
 					onFocus={() => suggestions.length > 0 && setOpen(true)}
 					placeholder={placeholder}
-					className="w-full bg-transparent text-sm text-ink-900 outline-none placeholder:text-ink-400"
+					className="w-full bg-transparent py-3 text-[14.5px] text-ink-900 outline-none placeholder:text-ink-400"
 				/>
 				{loading && <Loader2 size={16} className="animate-spin text-brand-500" />}
+				{!loading && query && <Search size={16} className="text-ink-300" />}
 			</div>
 
 			{invalid && (
-				<p className="mt-1 px-1 text-xs font-medium text-danger-500">
-					Pilih dari daftar saran atau masukkan koordinat (lat, lng).
+				<p className="absolute left-1 top-[calc(100%-8px)] z-10 px-1 text-[11px] font-medium text-danger-500 bg-white">
+					Pilih lokasi dari daftar saran
 				</p>
 			)}
 
 			{open && suggestions.length > 0 && (
-				<div className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-72 overflow-y-auto rounded-2xl border border-ink-200 bg-white shadow-lg">
+				<div className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-72 overflow-y-auto rounded-xl border border-ink-100 bg-white shadow-xl">
 					{suggestions.map((s) => (
 						<button
 							key={s.id}
 							onClick={() => handlePick(s)}
-							className="flex w-full flex-col items-start gap-0.5 px-4 py-3 text-left hover:bg-brand-50">
-							<span className="text-sm font-medium text-ink-900">{s.label}</span>
+							className="flex w-full flex-col items-start gap-0.5 border-b border-ink-100 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-brand-50">
+							<span className="text-[14px] font-medium text-ink-900">{s.label}</span>
 							{s.sublabel && (
-								<span className="text-xs text-ink-400">{s.sublabel}</span>
+								<span className="text-[12px] text-ink-400">{s.sublabel}</span>
 							)}
 						</button>
 					))}
@@ -257,8 +257,8 @@ export default function LocationAutocomplete({
 				!loading &&
 				query.trim().length >= 3 &&
 				suggestions.length === 0 && (
-					<div className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 rounded-2xl border border-ink-200 bg-white px-4 py-3 shadow-lg">
-						<p className="text-sm text-ink-400">Tidak ditemukan</p>
+					<div className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 rounded-xl border border-ink-100 bg-white px-4 py-3 shadow-lg">
+						<p className="text-[14px] text-ink-400">Tidak ditemukan</p>
 					</div>
 				)}
 		</div>

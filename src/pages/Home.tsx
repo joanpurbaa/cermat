@@ -1,310 +1,239 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
-	MapPin,
-	Megaphone,
-	LoaderCircle,
-	ArrowDown,
+	Search,
+	Navigation as NavIcon,
+	AlertTriangle,
 	Video,
+	Compass,
+	Clock,
+	MapPin,
+	ChevronRight,
+	Home as HomeIcon,
+	User,
+	Bell,
+	Wifi,
+	Battery,
+	Signal,
+	SlidersHorizontal,
 } from "lucide-react";
-import L from "leaflet";
-import {
-	MapContainer,
-	Marker,
-	Polyline,
-	TileLayer,
-	useMap,
-} from "react-leaflet";
-
-import BackButton from "../components/BackButton";
-import LocationAutocomplete, {
-	formatCoord,
-	parseDualCoordPair,
-	type LatLon,
-} from "../components/LocationAutocomplete";
-import CctvModal from "../components/CctvModal";
-import {
-	getFloodAwareRoutes,
-	type RouteData,
-	type RouteInfo,
-} from "../lib/floodRoute";
-
-function FitRouteBounds({ coordinates }: { coordinates: LatLon[] }) {
-	const map = useMap();
-	useEffect(() => {
-		if (!coordinates.length) return;
-		map.fitBounds(L.latLngBounds(coordinates), { padding: [48, 48] });
-	}, [coordinates, map]);
-	return null;
-}
-
-const liveIcon = L.divIcon({
-	className: "",
-	html: `
-    <div class="relative flex h-8 w-8 items-center justify-center">
-      <span class="cermat-ping absolute h-8 w-8 rounded-full bg-brand-400/50"></span>
-      <span class="relative h-3.5 w-3.5 rounded-full bg-brand-500 ring-4 ring-white shadow-lg"></span>
-    </div>
-  `,
-	iconSize: [32, 32],
-	iconAnchor: [16, 16],
-});
-
-const destinationIcon = L.divIcon({
-	className: "",
-	html: `
-    <svg width="28" height="36" viewBox="0 0 28 36" xmlns="http://www.w3.org/2000/svg">
-      <path d="M14 0C6.268 0 0 6.268 0 14c0 10.5 14 22 14 22s14-11.5 14-22c0-7.732-6.268-14-14-14z" fill="#2F8AF0"/>
-      <circle cx="14" cy="14" r="5" fill="white"/>
-    </svg>
-  `,
-	iconSize: [28, 36],
-	iconAnchor: [14, 36],
-});
 
 export default function Home() {
-	const [expanded, setExpanded] = useState(false);
-	const [originCoords, setOriginCoords] = useState<LatLon | null>(null);
-	const [destCoords, setDestCoords] = useState<LatLon | null>(null);
-	const [originExternal, setOriginExternal] = useState<{
-		label: string;
-		coords: LatLon;
-	} | null>(null);
-	const [destExternal, setDestExternal] = useState<{
-		label: string;
-		coords: LatLon;
-	} | null>(null);
-	const [routeData, setRouteData] = useState<RouteData | null>(null);
-	const [selectedIndex, setSelectedIndex] = useState(0);
-	const [loading, setLoading] = useState(false);
-	const [error, setError] = useState<string | null>(null);
-	const [activeCctv, setActiveCctv] = useState<{
-		name: string;
-		url: string;
-	} | null>(null);
+	const navigate = useNavigate();
+	const [searchQuery, setSearchQuery] = useState("");
 
-	useEffect(() => {
-		if (!originCoords || !destCoords) return;
-		let cancelled = false;
-		setLoading(true);
-		setError(null);
-
-		getFloodAwareRoutes(originCoords, destCoords)
-			.then((data) => {
-				if (cancelled) return;
-				setRouteData(data);
-				setSelectedIndex(
-					data.recommended_route_index ?? data.routes[0]?.index ?? 0,
-				);
-				setExpanded(true);
-			})
-			.catch((err) => {
-				if (cancelled) return;
-				setError(err instanceof Error ? err.message : "Terjadi kesalahan");
-				setRouteData(null);
-			})
-			.finally(() => {
-				if (!cancelled) setLoading(false);
-			});
-
-		return () => {
-			cancelled = true;
-		};
-	}, [originCoords, destCoords]);
-
-	function handleHeaderPaste(e: React.ClipboardEvent<HTMLDivElement>) {
-		const text = e.clipboardData.getData("text");
-		const dual = parseDualCoordPair(text);
-		if (!dual) return;
+	const handleSearchSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
-		setOriginCoords(dual.origin);
-		setDestCoords(dual.destination);
-		setOriginExternal({ label: formatCoord(dual.origin), coords: dual.origin });
-		setDestExternal({
-			label: formatCoord(dual.destination),
-			coords: dual.destination,
-		});
-	}
-
-	// FIX: cari route berdasarkan field `index`, bukan posisi array —
-	// posisi array bisa gak selaras kalau backend nge-skip/filter rute invalid.
-	const activeRoute: RouteInfo | null =
-		routeData?.routes.find((r) => r.index === selectedIndex) ??
-		routeData?.routes[0] ??
-		null;
-
-	const sheetHeight = expanded ? 460 : activeRoute ? 260 : 190;
-	const center = useMemo<LatLon>(
-		() => originCoords || [-6.9667, 110.4167],
-		[originCoords],
-	);
+		navigate("/navigasi");
+	};
 
 	return (
-		<main className="mx-auto flex h-screen w-[500px] flex-col overflow-hidden">
-			<div
-				className="relative z-[1000] bg-gradient-to-b from-brand-50 to-white px-8 pt-8 pb-6"
-				onPaste={handleHeaderPaste}>
-				<BackButton title="Rute" />
-
-				<LocationAutocomplete
-					className="mt-7 relative z-[20]"
-					placeholder="Lokasi berangkat kamu"
-					Icon={ArrowDown}
-					onSelect={(coords) => setOriginCoords(coords)}
-					externalValue={originExternal}
-				/>
-
-				<LocationAutocomplete
-					className="mt-3 relative z-[10]"
-					placeholder="Titik tujuan kamu"
-					Icon={MapPin}
-					onSelect={(coords) => setDestCoords(coords)}
-					externalValue={destExternal}
-				/>
-
-				{error && (
-					<p className="mt-3 text-sm font-medium text-danger-500">{error}</p>
-				)}
-			</div>
-
-			<div className="relative z-0 flex-1 overflow-hidden">
-				<MapContainer
-					center={center}
-					zoom={14}
-					scrollWheelZoom={false}
-					className="h-full w-full">
-					<TileLayer
-						attribution="&copy; OpenStreetMap contributors"
-						url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-					/>
-
-					{originCoords && <Marker position={originCoords} icon={liveIcon} />}
-					{destCoords && <Marker position={destCoords} icon={destinationIcon} />}
-
-					{activeRoute && activeRoute.points?.length > 0 && (
-						<>
-							<Polyline
-								positions={activeRoute.points}
-								pathOptions={{ color: "#2f8af0", weight: 5, opacity: 0.9 }}
-							/>
-							<FitRouteBounds coordinates={activeRoute.points} />
-						</>
-					)}
-				</MapContainer>
-			</div>
-
-			<div
-				className="relative z-10 shrink-0 overflow-hidden rounded-t-[28px] bg-white shadow-[0_-8px_30px_rgba(11,18,32,0.1)] transition-all duration-300"
-				style={{ height: sheetHeight }}>
-				<button
-					onClick={() => setExpanded(!expanded)}
-					className="flex w-full items-center justify-center py-3">
-					<div className="h-1.5 w-12 rounded-full bg-ink-300" />
-				</button>
-
-				<div
-					className="overflow-y-auto px-8 pb-8"
-					style={{ height: sheetHeight - 48 }}>
-					{loading && (
-						<div className="flex items-center gap-3 text-ink-500">
-							<LoaderCircle size={18} className="animate-spin text-brand-500" />
-							<p className="text-sm">Mencari rute teraman dari banjir...</p>
-						</div>
-					)}
-
-					{!loading && !activeRoute && (
-						<p className="text-sm text-ink-500">
-							Masukkan lokasi berangkat dan tujuan untuk melihat rute tercepat.
-						</p>
-					)}
-
-					{!loading && activeRoute && (
-						<>
-							<p className="font-display text-lg font-bold text-ink-900">
-								{Math.round(activeRoute.travel_time_in_seconds / 60)} menit{" "}
-								<span className="font-medium text-ink-500">
-									&middot; {(activeRoute.length_in_meters / 1000).toFixed(1)} km
-								</span>
-							</p>
-
-							{activeRoute.floods.length === 0 ? (
-								<div className="mt-4 rounded-2xl bg-brand-50 px-4 py-3">
-									<p className="text-sm text-ink-900">
-										Tidak ada titik banjir terdeteksi di rute ini.
-									</p>
-								</div>
-							) : (
-								activeRoute.floods.map((flood, i) => (
-									<div
-										key={`${flood.name}-${i}`}
-										className="mt-3 flex items-start gap-3 rounded-2xl bg-alert-50 px-4 py-3">
-										<Megaphone size={20} className="mt-0.5 shrink-0 text-alert-500" />
-										<div className="min-w-0 flex-1">
-											<p className="text-sm text-ink-900">
-												<span className="font-display font-semibold">Banjir</span> di{" "}
-												{flood.name}{" "}
-												<span className="text-ink-500">
-													({Math.round(flood.flood_confidence * 100)}% yakin)
-												</span>
-											</p>
-											{flood.stream_url && (
-												<button
-													onClick={() =>
-														setActiveCctv({ name: flood.name, url: flood.stream_url! })
-													}
-													className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-alert-500 px-3 py-1.5 text-xs font-semibold text-white">
-													<Video size={14} />
-													Lihat CCTV Langsung
-												</button>
-											)}
-										</div>
-									</div>
-								))
-							)}
-
-							{routeData && routeData.routes.length > 1 && (
-								<div className="mt-7">
-									<p className="text-xs font-semibold uppercase tracking-wide text-ink-400">
-										Pilihan rute lain
-									</p>
-									<div className="mt-3 flex flex-col gap-2">
-										{routeData.routes.map((r) => (
-											<button
-												key={r.index}
-												onClick={() => setSelectedIndex(r.index)}
-												className={`flex items-center justify-between rounded-xl border px-4 py-3 text-left text-sm transition-colors ${
-													r.index === selectedIndex
-														? "border-brand-500 bg-brand-50"
-														: "border-ink-200 bg-white"
-												}`}>
-												<span className="font-medium text-ink-900">
-													{Math.round(r.travel_time_in_seconds / 60)} menit ·{" "}
-													{(r.length_in_meters / 1000).toFixed(1)} km
-												</span>
-												<span
-													className={`text-xs font-semibold ${
-														r.floods.length === 0 ? "text-brand-500" : "text-alert-500"
-													}`}>
-													{r.floods.length === 0
-														? "Aman"
-														: `${r.floods.length} titik banjir`}
-												</span>
-											</button>
-										))}
-									</div>
-								</div>
-							)}
-						</>
-					)}
+		<div className="min-h-screen w-full bg-slate-900 md:py-6 flex items-center justify-center font-sans antialiased">
+			{/* MOBILE FRAME CONTAINER */}
+			<main className="relative w-full max-w-[430px] min-h-screen md:min-h-[880px] md:max-h-[920px] md:rounded-[48px] bg-slate-50 flex flex-col overflow-hidden shadow-2xl border-0 md:border-[8px] md:border-slate-800">
+				{/* MOBILE STATUS BAR (iOS/Android Style) */}
+				<div className="flex items-center justify-between px-7 pt-3 pb-1 text-slate-800 text-xs font-semibold select-none">
+					<span>9:41</span>
+					<div className="flex items-center gap-1.5">
+						<Signal size={14} className="fill-current" />
+						<Wifi size={14} />
+						<Battery size={18} className="fill-current" />
+					</div>
 				</div>
-			</div>
 
-			{activeCctv && (
-				<CctvModal
-					name={activeCctv.name}
-					streamUrl={activeCctv.url}
-					onClose={() => setActiveCctv(null)}
-				/>
-			)}
-		</main>
+				{/* SCROLLABLE APP CONTENT */}
+				<div className="flex-1 overflow-y-auto px-5 pt-2 pb-28 no-scrollbar">
+					{/* HEADER SECTION */}
+					<div className="flex items-center justify-between mb-4 mt-1">
+						<div>
+							<p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">
+								Selamat datang
+							</p>
+							<h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
+								Mau ke mana hari ini?
+							</h1>
+						</div>
+						<button className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm border border-slate-100 active:scale-90 transition-transform">
+							<Bell size={18} />
+							<span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
+						</button>
+					</div>
+
+					{/* SEARCH BAR (MOBILE STYLE) */}
+					<form onSubmit={handleSearchSubmit} className="relative mb-5">
+						<input
+							type="text"
+							value={searchQuery}
+							onChange={(e) => setSearchQuery(e.target.value)}
+							onClick={() => navigate("/navigasi")}
+							placeholder="Cari rute, tujuan, atau area..."
+							className="w-full rounded-2xl bg-white py-3.5 pl-11 pr-11 text-sm font-semibold text-slate-800 placeholder-slate-400 shadow-sm border border-slate-100 outline-none transition-all focus:ring-2 focus:ring-blue-500/20 active:scale-[0.99]"
+						/>
+						<Search className="absolute left-4 top-3.5 text-slate-400" size={18} />
+						<button
+							type="button"
+							onClick={() => navigate("/navigasi")}
+							className="absolute right-3 top-2.5 p-1 text-slate-400 hover:text-slate-600 active:scale-95">
+							<SlidersHorizontal size={18} />
+						</button>
+					</form>
+
+					{/* PUBLIC BANNER SECTION (public/banner.png) */}
+					<div className="mb-5">
+						<div
+							onClick={() => navigate("/navigasi")}
+							className="relative overflow-hidden rounded-2xl shadow-sm bg-blue-600 cursor-pointer active:scale-[0.98] transition-transform">
+							<img
+								src="/banner.png"
+								alt="Promo Banner"
+								className="w-full h-auto object-cover block"
+								onError={(e) => {
+									// Fallback jika file public/banner.png belum ditempatkan
+									const target = e.currentTarget;
+									target.style.display = "none";
+									const fallback = target.nextElementSibling as HTMLElement;
+									if (fallback) fallback.style.display = "flex";
+								}}
+							/>
+							{/* Fallback visual jika file /banner.png belum ada */}
+							<div className="hidden min-h-[120px] w-full items-center justify-between p-4 text-white bg-gradient-to-r from-blue-700 to-indigo-600">
+								<div className="max-w-[70%]">
+									<span className="bg-white/20 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+										Rute Pintar
+									</span>
+									<h3 className="text-base font-bold mt-1">
+										Nyetir Bebas Banjir & Macet
+									</h3>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					{/* QUICK SERVICES GRID */}
+					<div className="mb-6">
+						<div className="flex items-center justify-between mb-3">
+							<h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+								Fitur Utama
+							</h2>
+						</div>
+						<div className="grid grid-cols-4 gap-3">
+							<button
+								onClick={() => navigate("/navigasi")}
+								className="flex flex-col items-center gap-2 rounded-2xl bg-white p-3 shadow-sm border border-slate-100/80 active:scale-95 transition-all">
+								<div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+									<NavIcon size={22} />
+								</div>
+								<span className="text-[11px] font-bold text-slate-700">Rute Aman</span>
+							</button>
+
+							<button
+								onClick={() => navigate("/navigasi")}
+								className="flex flex-col items-center gap-2 rounded-2xl bg-white p-3 shadow-sm border border-slate-100/80 active:scale-95 transition-all">
+								<div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+									<AlertTriangle size={22} />
+								</div>
+								<span className="text-[11px] font-bold text-slate-700">
+									Info Banjir
+								</span>
+							</button>
+
+							<button
+								onClick={() => navigate("/navigasi")}
+								className="flex flex-col items-center gap-2 rounded-2xl bg-white p-3 shadow-sm border border-slate-100/80 active:scale-95 transition-all">
+								<div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+									<Video size={22} />
+								</div>
+								<span className="text-[11px] font-bold text-slate-700">CCTV Live</span>
+							</button>
+
+							<button
+								onClick={() => navigate("/navigasi")}
+								className="flex flex-col items-center gap-2 rounded-2xl bg-white p-3 shadow-sm border border-slate-100/80 active:scale-95 transition-all">
+								<div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+									<Compass size={22} />
+								</div>
+								<span className="text-[11px] font-bold text-slate-700">Jelajah</span>
+							</button>
+						</div>
+					</div>
+
+					{/* RECENT DESTINATIONS LIST */}
+					<div>
+						<div className="flex items-center justify-between mb-3">
+							<h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+								Terakhir Dikunjungi
+							</h2>
+							<button
+								onClick={() => navigate("/navigasi")}
+								className="text-xs font-bold text-blue-600 active:opacity-70">
+								Lihat Semua
+							</button>
+						</div>
+
+						<div className="space-y-2.5">
+							<div
+								onClick={() => navigate("/navigasi")}
+								className="flex items-center justify-between rounded-2xl bg-white p-3.5 shadow-sm border border-slate-100/80 cursor-pointer active:scale-[0.98] transition-transform">
+								<div className="flex items-center gap-3">
+									<div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
+										<Clock size={18} />
+									</div>
+									<div>
+										<h4 className="text-sm font-bold text-slate-800">
+											Tugu Muda Semarang
+										</h4>
+										<p className="text-xs font-medium text-slate-400">
+											Sekayu, Semarang Tengah
+										</p>
+									</div>
+								</div>
+								<ChevronRight size={18} className="text-slate-300" />
+							</div>
+
+							<div
+								onClick={() => navigate("/navigasi")}
+								className="flex items-center justify-between rounded-2xl bg-white p-3.5 shadow-sm border border-slate-100/80 cursor-pointer active:scale-[0.98] transition-transform">
+								<div className="flex items-center gap-3">
+									<div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
+										<MapPin size={18} />
+									</div>
+									<div>
+										<h4 className="text-sm font-bold text-slate-800">Indraprasta</h4>
+										<p className="text-xs font-medium text-slate-400">
+											Jl. Indraprasta No.107, Semarang
+										</p>
+									</div>
+								</div>
+								<ChevronRight size={18} className="text-slate-300" />
+							</div>
+						</div>
+					</div>
+				</div>
+
+				{/* FLOATING MOBILE BOTTOM NAVIGATION BAR */}
+				<div className="absolute bottom-0 left-0 right-0 z-40 bg-white/90 backdrop-blur-lg border-t border-slate-100 px-6 py-2 pb-5 flex items-center justify-around">
+					<button
+						onClick={() => navigate("/")}
+						className="flex flex-col items-center gap-1 text-blue-600 active:scale-90 transition-transform">
+						<HomeIcon size={20} className="stroke-[2.5]" />
+						<span className="text-[10px] font-extrabold">Beranda</span>
+					</button>
+
+					<button
+						onClick={() => navigate("/navigasi")}
+						className="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-600 active:scale-90 transition-transform">
+						<NavIcon size={20} />
+						<span className="text-[10px] font-bold">Navigasi</span>
+					</button>
+
+					<button
+						onClick={() => alert("Halaman Profil")}
+						className="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-600 active:scale-90 transition-transform">
+						<User size={20} />
+						<span className="text-[10px] font-bold">Profil</span>
+					</button>
+				</div>
+			</main>
+		</div>
 	);
 }

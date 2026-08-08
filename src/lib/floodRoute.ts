@@ -8,15 +8,30 @@ export interface FloodLocation {
 	stream_url?: string; // URL CCTV live (.m3u8), opsional
 }
 
+export interface GuidanceInstruction {
+	type: string;
+	maneuver: string;
+	message: string;
+	street?: string | null;
+	road_numbers?: string[] | null;
+	point?: { lat: number; lng: number } | null;
+	route_offset_in_meters?: number;
+	travel_time_in_seconds?: number;
+	roundabout_exit_number?: number | null;
+	turn_angle_in_decimal_degrees?: number | null;
+}
+
 export interface RouteInfo {
 	index: number;
 	length_in_meters: number;
 	travel_time_in_seconds: number;
 	traffic_delay_in_seconds: number;
 	points: LatLon[];
-	floods: FloodLocation[];
+	guidance: GuidanceInstruction[];
 	score: number;
 	recommended: boolean;
+	floods: Array<{ name: string; stream_url?: string }>;
+	instructions?: Instruction[];
 }
 
 export interface RouteData {
@@ -25,6 +40,20 @@ export interface RouteData {
 	threshold_m: number;
 	recommended_route_index: number | null;
 	routes: RouteInfo[];
+}
+
+export interface Instruction {
+	type: string;
+	maneuver: string; // Tipe Maneuver TomTom (misal: "TURN_LEFT", "KEEP_LEFT", "ARRIVE", dll)
+	message: string;
+	street?: string;
+	point: {
+		lat: number;
+		lng: number;
+	};
+	route_offset_in_meters?: number;
+	travel_time_in_seconds?: number;
+	turn_angle_in_decimal_degrees?: number;
 }
 
 interface ApiResponse<T> {
