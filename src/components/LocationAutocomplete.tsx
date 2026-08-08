@@ -100,7 +100,7 @@ interface LocationAutocompleteProps {
 	Icon?: LucideIcon;
 	onSelect: (
 		coords: LatLon,
-		item?: { name: string; [key: string]: any },
+		item?: { name: string; [key: string]: string },
 	) => void;
 	externalValue?: { label: string; coords: LatLon } | null;
 }
