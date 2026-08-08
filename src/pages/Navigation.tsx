@@ -15,6 +15,8 @@ import {
 	Signal,
 	ListOrdered,
 	Route as RouteIcon,
+  ShieldCheck,
+  AlertTriangle,
 } from "lucide-react";
 import L from "leaflet";
 import { MapContainer, Marker, Polyline, TileLayer } from "react-leaflet";
@@ -512,6 +514,7 @@ export default function Navigation() {
 							<div
 								className="absolute bottom-0 left-0 right-0 z-[1000] flex flex-col rounded-t-[28px] bg-white shadow-[0_-8px_30px_rgba(0,0,0,0.12)] transition-all duration-300"
 								style={{ height: sheetHeight }}>
+								{/* Drag Handle */}
 								<button
 									onClick={() => setExpanded(!expanded)}
 									className="flex w-full cursor-pointer items-center justify-center py-2.5 hover:bg-slate-50/50 rounded-t-[28px]">
@@ -520,26 +523,53 @@ export default function Navigation() {
 
 								<div className="flex flex-1 flex-col justify-between overflow-hidden px-5 pb-5">
 									<div className="flex flex-col overflow-hidden">
-										{/* FLOATING ACTIVE MANEUVER CARD (Muncul saat rute aktif & mode navigasi) */}
+										{/* 1. HEADER RINGKASAN RUTE (YANG SEBELUMNYA HILANG) */}
+										{activeRoute && (
+											<div className="mb-2.5">
+												<div className="flex items-center justify-between">
+													<div className="flex items-baseline gap-2">
+														<span className="text-2xl font-extrabold tracking-tight text-slate-900">
+															{Math.round(activeRoute.travel_time_in_seconds / 60)} mnt
+														</span>
+														<span className="text-xs font-semibold text-slate-400">
+															({(activeRoute.length_in_meters / 1000).toFixed(1)} km)
+														</span>
+													</div>
+
+													{activeRoute.floods.length === 0 ? (
+														<span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-700">
+															<ShieldCheck size={14} /> Bebas Banjir
+														</span>
+													) : (
+														<span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-extrabold text-amber-800">
+															<AlertTriangle size={14} /> {activeRoute.floods.length} Titik
+															Banjir
+														</span>
+													)}
+												</div>
+											</div>
+										)}
+
+										{/* 2. KARTU BIRU PETUNJUK SELANJUTNYA (Diletakkan di atas Tab) */}
 										{activeRoute && activeRoute.guidance?.[currentGuidanceIndex] && (
-											<div className="absolute top-20 left-4 right-4 z-[1000] rounded-2xl bg-blue-600 p-4 text-white shadow-xl flex items-center gap-4 transition-all duration-300">
-												<div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/20 backdrop-blur-md">
+											<div className="mb-3 rounded-2xl bg-blue-600 p-3.5 text-white shadow-md flex items-center gap-3.5 transition-all">
+												<div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20 backdrop-blur-md">
 													<ManeuverIcon
 														maneuver={activeRoute.guidance[currentGuidanceIndex].maneuver}
-														size={28}
+														size={24}
 														className="text-white"
 													/>
 												</div>
 
 												<div className="flex-1 min-w-0">
-													<p className="text-[11px] font-bold uppercase tracking-wider text-blue-100">
+													<p className="text-[10px] font-extrabold uppercase tracking-wider text-blue-100">
 														Petunjuk Selanjutnya
 													</p>
-													<h3 className="text-sm font-extrabold truncate leading-tight">
+													<h3 className="text-xs font-black truncate leading-tight">
 														{activeRoute.guidance[currentGuidanceIndex].message}
 													</h3>
 													{activeRoute.guidance[currentGuidanceIndex].street && (
-														<p className="text-xs text-blue-100/90 truncate">
+														<p className="text-[11px] text-blue-100/90 truncate mt-0.5">
 															Ke {activeRoute.guidance[currentGuidanceIndex].street}
 														</p>
 													)}
@@ -547,8 +577,8 @@ export default function Navigation() {
 											</div>
 										)}
 
-										{/* TAB SELECTOR: Opsi Rute vs Petunjuk Arah */}
-										<div className="my-2 flex rounded-xl bg-slate-100 p-1">
+										{/* 3. TAB SELECTOR */}
+										<div className="mb-2 flex rounded-xl bg-slate-100 p-1">
 											<button
 												onClick={() => setActiveTab("routes")}
 												className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-bold transition-all ${
@@ -574,10 +604,10 @@ export default function Navigation() {
 											</button>
 										</div>
 
-										{/* CONTENT CONTENT CONTAINER */}
+										{/* 4. DAFTAR KONTEN TAB */}
 										<div
 											className="overflow-y-auto pr-1 no-scrollbar mt-1"
-											style={{ maxHeight: sheetHeight - 160 }}>
+											style={{ maxHeight: sheetHeight - 220 }}>
 											{/* TAB 1: PILIHAN RUTE */}
 											{activeTab === "routes" &&
 												routeData &&
@@ -650,7 +680,7 @@ export default function Navigation() {
 											{activeTab === "instructions" && (
 												<div className="py-1">
 													{activeRoute?.guidance && activeRoute.guidance.length > 0 ? (
-														<div className="relative border-l-2 border-slate-200 ml-4 space-y-4 my-2 pr-2">
+														<div className="relative border-l-2 border-slate-200 ml-4 space-y-3 my-2 pr-1">
 															{activeRoute.guidance.map((step, idx) => {
 																const isCurrentStep = idx === currentGuidanceIndex;
 																const isPassedStep = idx < currentGuidanceIndex;
@@ -658,14 +688,13 @@ export default function Navigation() {
 																return (
 																	<div
 																		key={idx}
-																		className={`relative pl-6 transition-all duration-300 ${
+																		className={`relative pl-6 transition-all ${
 																			isPassedStep ? "opacity-40" : "opacity-100"
 																		}`}>
-																		{/* Line Bullet Node */}
 																		<div
 																			className={`absolute -left-[17px] top-0 flex h-8 w-8 items-center justify-center rounded-full border transition-all ${
 																				isCurrentStep
-																					? "bg-blue-600 border-blue-600 text-white shadow-md ring-4 ring-blue-100 scale-110"
+																					? "bg-blue-600 border-blue-600 text-white shadow-md ring-4 ring-blue-100"
 																					: "bg-white border-slate-200 text-slate-700"
 																			}`}>
 																			<ManeuverIcon
@@ -675,7 +704,6 @@ export default function Navigation() {
 																			/>
 																		</div>
 
-																		{/* Card Instruction */}
 																		<div
 																			className={`rounded-xl p-2.5 transition-all ${
 																				isCurrentStep
@@ -703,14 +731,6 @@ export default function Navigation() {
 																					Ke {step.street}
 																				</p>
 																			)}
-
-																			{step.route_offset_in_meters !== undefined && (
-																				<span className="mt-1 inline-block text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-																					{step.route_offset_in_meters >= 1000
-																						? `${(step.route_offset_in_meters / 1000).toFixed(1)} km`
-																						: `${step.route_offset_in_meters} m`}
-																				</span>
-																			)}
 																		</div>
 																	</div>
 																);
@@ -722,6 +742,7 @@ export default function Navigation() {
 										</div>
 									</div>
 
+									{/* 5. TOMBOL MULAI NAVIGASI */}
 									{activeRoute && !loading && (
 										<div className="pt-2">
 											<button
