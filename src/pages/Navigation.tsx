@@ -24,7 +24,6 @@ import {
 	Marker,
 	Polyline,
 	TileLayer,
-	useMap,
 } from "react-leaflet";
 
 import LocationAutocomplete, {
@@ -40,14 +39,14 @@ import {
 	type RouteInfo,
 } from "../lib/floodRoute";
 
-function FitRouteBounds({ coordinates }: { coordinates: LatLon[] }) {
-	const map = useMap();
-	useEffect(() => {
-		if (!coordinates.length) return;
-		map.fitBounds(L.latLngBounds(coordinates), { padding: [60, 60] });
-	}, [coordinates, map]);
-	return null;
-}
+// function FitRouteBounds({ coordinates }: { coordinates: LatLon[] }) {
+// 	const map = useMap();
+// 	useEffect(() => {
+// 		if (!coordinates.length) return;
+// 		map.fitBounds(L.latLngBounds(coordinates), { padding: [60, 60] });
+// 	}, [coordinates, map]);
+// 	return null;
+// }
 
 // Marker Icons
 const liveIcon = L.divIcon({
@@ -74,6 +73,24 @@ const destinationIcon = L.divIcon({
 	iconAnchor: [15, 38],
 });
 
+// Menghitung jarak dalam meter antara dua koordinat [lat, lng]
+function getDistanceMeters(
+	coord1: [number, number],
+	coord2: [number, number],
+): number {
+	const R = 6371e3; // radius bumi dalam meter
+	const dLat = ((coord2[0] - coord1[0]) * Math.PI) / 180;
+	const dLng = ((coord2[1] - coord1[1]) * Math.PI) / 180;
+	const a =
+		Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+		Math.cos((coord1[0] * Math.PI) / 180) *
+			Math.cos((coord2[0] * Math.PI) / 180) *
+			Math.sin(dLng / 2) *
+			Math.sin(dLng / 2);
+	const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+	return R * c;
+}
+
 export default function Navigation() {
 	const [screenState, setScreenState] = useState<"search" | "route">("search");
 	const [expanded, setExpanded] = useState(false);
@@ -86,6 +103,29 @@ export default function Navigation() {
 
 	const [originLabel, setOriginLabel] = useState<string>("");
 	const [destLabel, setDestLabel] = useState<string>("");
+
+	const [currentLocation, setCurrentLocation] = useState<
+		[number, number] | null
+	>(null);
+
+	useEffect(() => {
+		if (!navigator.geolocation) return;
+
+		const watchId = navigator.geolocation.watchPosition(
+			(position) => {
+				const { latitude, longitude } = position.coords;
+				setCurrentLocation([latitude, longitude]);
+			},
+			(err) => console.warn("GPS error:", err.message),
+			{
+				enableHighAccuracy: true,
+				maximumAge: 1000,
+				timeout: 5000,
+			},
+		);
+
+		return () => navigator.geolocation.clearWatch(watchId);
+	}, []);
 
 	const [originExternal, setOriginExternal] = useState<{
 		label: string;
@@ -179,6 +219,62 @@ export default function Navigation() {
 		routeData?.routes.find((r) => r.index === selectedIndex) ??
 		routeData?.routes[0] ??
 		null;
+
+	// Hitung indeks titik rute terdekat dari lokasi Fake GPS
+	const { passedPoints, remainingPoints } = useMemo(() => {
+		if (!activeRoute || !activeRoute.points || activeRoute.points.length === 0) {
+			return { passedPoints: [], remainingPoints: [], currentGuidanceIndex: 0 };
+		}
+
+		const userPos = currentLocation || originCoords;
+		if (!userPos) {
+			return {
+				passedPoints: [],
+				remainingPoints: activeRoute.points,
+				currentGuidanceIndex: 0,
+			};
+		}
+
+		// Cari titik pada rute yang paling dekat dengan posisi user saat ini
+		let closestIndex = 0;
+		let minDistance = Infinity;
+
+		activeRoute.points.forEach((pt, idx) => {
+			const dist = getDistanceMeters([userPos[0], userPos[1]], pt);
+			if (dist < minDistance) {
+				minDistance = dist;
+				closestIndex = idx;
+			}
+		});
+
+		// Potong rute menjadi yang sudah dilewati & yang belum
+		const passed = activeRoute.points.slice(0, closestIndex + 1);
+		const remaining = activeRoute.points.slice(closestIndex);
+
+		// Cari petunjuk arah (guidance) mana yang sedang/akan dihadapi
+		let guidanceIdx = 0;
+		if (activeRoute.guidance && activeRoute.guidance.length > 0) {
+			let minGuidanceDist = Infinity;
+			activeRoute.guidance.forEach((g, gIdx) => {
+				if (g.point) {
+					const dist = getDistanceMeters(
+						[userPos[0], userPos[1]],
+						[g.point.lat, g.point.lng],
+					);
+					if (dist < minGuidanceDist) {
+						minGuidanceDist = dist;
+						guidanceIdx = gIdx;
+					}
+				}
+			});
+		}
+
+		return {
+			passedPoints: passed,
+			remainingPoints: remaining,
+			currentGuidanceIndex: guidanceIdx,
+		};
+	}, [activeRoute, currentLocation, originCoords]);
 
 	const sheetHeight = expanded ? 520 : activeRoute ? 340 : 180;
 
@@ -367,30 +463,48 @@ export default function Navigation() {
 
 							<div className="relative z-0 h-full w-full">
 								<MapContainer
-									center={center}
-									zoom={14}
+									center={currentLocation || center}
+									zoom={16}
 									zoomControl={false}
 									scrollWheelZoom={true}
 									className="h-full w-full">
 									<TileLayer
-										attribution='&copy; <a href="https://carto.com/">CARTO</a>'
+										attribution="&copy; CARTO"
 										url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
 									/>
 
-									{originCoords && <Marker position={originCoords} icon={liveIcon} />}
+									{/* Marker Posisi Driver/User Terkini (Mengikuti Fake GPS) */}
+									{(currentLocation || originCoords) && (
+										<Marker position={currentLocation || originCoords!} icon={liveIcon} />
+									)}
+
+									{/* Marker Tujuan */}
 									{destCoords && <Marker position={destCoords} icon={destinationIcon} />}
 
-									{activeRoute && activeRoute.points?.length > 0 && (
+									{/* RUTE YANG SUDAH DILEWATI (Warna Abu-Abu / Opacity Rendah) */}
+									{passedPoints.length > 1 && (
+										<Polyline
+											positions={passedPoints}
+											pathOptions={{
+												color: "#94A3B8",
+												weight: 5,
+												opacity: 0.5,
+												dashArray: "5, 10",
+											}}
+										/>
+									)}
+
+									{/* RUTE SISA / YANG AKAN DILALUI (Warna Biru Utama) */}
+									{remainingPoints.length > 0 && (
 										<>
 											<Polyline
-												positions={activeRoute.points}
+												positions={remainingPoints}
 												pathOptions={{ color: "#1D4ED8", weight: 8, opacity: 0.3 }}
 											/>
 											<Polyline
-												positions={activeRoute.points}
-												pathOptions={{ color: "#2563EB", weight: 5, opacity: 1 }}
+												positions={remainingPoints}
+												pathOptions={{ color: "#2563EB", weight: 6, opacity: 1 }}
 											/>
-											<FitRouteBounds coordinates={activeRoute.points} />
 										</>
 									)}
 								</MapContainer>
