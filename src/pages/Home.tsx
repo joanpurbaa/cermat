@@ -9,12 +9,7 @@ import {
 	Clock,
 	MapPin,
 	ChevronRight,
-	Home as HomeIcon,
-	User,
 	Bell,
-	Wifi,
-	Battery,
-	Signal,
 	SlidersHorizontal,
 } from "lucide-react";
 
@@ -28,212 +23,163 @@ export default function Home() {
 	};
 
 	return (
-		<div className="min-h-screen w-full bg-slate-900 md:py-6 flex items-center justify-center font-sans antialiased">
-			{/* MOBILE FRAME CONTAINER */}
-			<main className="relative w-full max-w-[430px] min-h-screen md:min-h-[880px] md:max-h-[920px] md:rounded-[48px] bg-slate-50 flex flex-col overflow-hidden shadow-2xl border-0 md:border-[8px] md:border-slate-800">
-				{/* MOBILE STATUS BAR (iOS/Android Style) */}
-				<div className="flex items-center justify-between px-7 pt-3 pb-1 text-slate-800 text-xs font-semibold select-none">
-					<span>9:41</span>
-					<div className="flex items-center gap-1.5">
-						<Signal size={14} className="fill-current" />
-						<Wifi size={14} />
-						<Battery size={18} className="fill-current" />
-					</div>
+		<div className="w-full h-full bg-slate-50 px-5 pt-2 pb-6">
+			{/* HEADER SECTION */}
+			<div className="flex items-center justify-between mb-4 mt-1">
+				<div>
+					<p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">
+						Selamat datang
+					</p>
+					<h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
+						Mau ke mana hari ini?
+					</h1>
 				</div>
+				<button className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm border border-slate-100 active:scale-90 transition-transform">
+					<Bell size={18} />
+					<span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
+				</button>
+			</div>
 
-				{/* SCROLLABLE APP CONTENT */}
-				<div className="flex-1 overflow-y-auto px-5 pt-2 pb-28 no-scrollbar">
-					{/* HEADER SECTION */}
-					<div className="flex items-center justify-between mb-4 mt-1">
-						<div>
-							<p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">
-								Selamat datang
-							</p>
-							<h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
-								Mau ke mana hari ini?
-							</h1>
-						</div>
-						<button className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm border border-slate-100 active:scale-90 transition-transform">
-							<Bell size={18} />
-							<span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
-						</button>
-					</div>
-
-					{/* SEARCH BAR (MOBILE STYLE) */}
-					<form onSubmit={handleSearchSubmit} className="relative mb-5">
-						<input
-							type="text"
-							value={searchQuery}
-							onChange={(e) => setSearchQuery(e.target.value)}
-							onClick={() => navigate("/navigasi")}
-							placeholder="Cari rute, tujuan, atau area..."
-							className="w-full rounded-2xl bg-white py-3.5 pl-11 pr-11 text-sm font-semibold text-slate-800 placeholder-slate-400 shadow-sm border border-slate-100 outline-none transition-all focus:ring-2 focus:ring-blue-500/20 active:scale-[0.99]"
-						/>
-						<Search className="absolute left-4 top-3.5 text-slate-400" size={18} />
-						<button
-							type="button"
-							onClick={() => navigate("/navigasi")}
-							className="absolute right-3 top-2.5 p-1 text-slate-400 hover:text-slate-600 active:scale-95">
-							<SlidersHorizontal size={18} />
-						</button>
-					</form>
-
-					{/* PUBLIC BANNER SECTION (public/banner.png) */}
-					<div className="mb-5">
-						<div
-							onClick={() => navigate("/navigasi")}
-							className="relative overflow-hidden rounded-2xl shadow-sm bg-blue-600 cursor-pointer active:scale-[0.98] transition-transform">
-							<img
-								src="/banner.png"
-								alt="Promo Banner"
-								className="w-full h-auto object-cover block"
-								onError={(e) => {
-									// Fallback jika file public/banner.png belum ditempatkan
-									const target = e.currentTarget;
-									target.style.display = "none";
-									const fallback = target.nextElementSibling as HTMLElement;
-									if (fallback) fallback.style.display = "flex";
-								}}
-							/>
-							{/* Fallback visual jika file /banner.png belum ada */}
-							<div className="hidden min-h-[120px] w-full items-center justify-between p-4 text-white bg-gradient-to-r from-blue-700 to-indigo-600">
-								<div className="max-w-[70%]">
-									<span className="bg-white/20 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
-										Rute Pintar
-									</span>
-									<h3 className="text-base font-bold mt-1">
-										Nyetir Bebas Banjir & Macet
-									</h3>
-								</div>
-							</div>
-						</div>
-					</div>
-
-					{/* QUICK SERVICES GRID */}
-					<div className="mb-6">
-						<div className="flex items-center justify-between mb-3">
-							<h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-								Fitur Utama
-							</h2>
-						</div>
-						<div className="grid grid-cols-4 gap-3">
-							<button
-								onClick={() => navigate("/navigasi")}
-								className="flex flex-col items-center gap-2 rounded-2xl bg-white p-3 shadow-sm border border-slate-100/80 active:scale-95 transition-all">
-								<div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
-									<NavIcon size={22} />
-								</div>
-								<span className="text-[11px] font-bold text-slate-700">Rute Aman</span>
-							</button>
-
-							<button
-								onClick={() => navigate("/navigasi")}
-								className="flex flex-col items-center gap-2 rounded-2xl bg-white p-3 shadow-sm border border-slate-100/80 active:scale-95 transition-all">
-								<div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
-									<AlertTriangle size={22} />
-								</div>
-								<span className="text-[11px] font-bold text-slate-700">
-									Info Banjir
-								</span>
-							</button>
-
-							<button
-								onClick={() => navigate("/navigasi")}
-								className="flex flex-col items-center gap-2 rounded-2xl bg-white p-3 shadow-sm border border-slate-100/80 active:scale-95 transition-all">
-								<div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
-									<Video size={22} />
-								</div>
-								<span className="text-[11px] font-bold text-slate-700">CCTV Live</span>
-							</button>
-
-							<button
-								onClick={() => navigate("/navigasi")}
-								className="flex flex-col items-center gap-2 rounded-2xl bg-white p-3 shadow-sm border border-slate-100/80 active:scale-95 transition-all">
-								<div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
-									<Compass size={22} />
-								</div>
-								<span className="text-[11px] font-bold text-slate-700">Jelajah</span>
-							</button>
-						</div>
-					</div>
-
-					{/* RECENT DESTINATIONS LIST */}
-					<div>
-						<div className="flex items-center justify-between mb-3">
-							<h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-								Terakhir Dikunjungi
-							</h2>
-							<button
-								onClick={() => navigate("/navigasi")}
-								className="text-xs font-bold text-blue-600 active:opacity-70">
-								Lihat Semua
-							</button>
-						</div>
-
-						<div className="space-y-2.5">
-							<div
-								onClick={() => navigate("/navigasi")}
-								className="flex items-center justify-between rounded-2xl bg-white p-3.5 shadow-sm border border-slate-100/80 cursor-pointer active:scale-[0.98] transition-transform">
-								<div className="flex items-center gap-3">
-									<div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
-										<Clock size={18} />
-									</div>
-									<div>
-										<h4 className="text-sm font-bold text-slate-800">
-											Tugu Muda Semarang
-										</h4>
-										<p className="text-xs font-medium text-slate-400">
-											Sekayu, Semarang Tengah
-										</p>
-									</div>
-								</div>
-								<ChevronRight size={18} className="text-slate-300" />
-							</div>
-
-							<div
-								onClick={() => navigate("/navigasi")}
-								className="flex items-center justify-between rounded-2xl bg-white p-3.5 shadow-sm border border-slate-100/80 cursor-pointer active:scale-[0.98] transition-transform">
-								<div className="flex items-center gap-3">
-									<div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
-										<MapPin size={18} />
-									</div>
-									<div>
-										<h4 className="text-sm font-bold text-slate-800">Indraprasta</h4>
-										<p className="text-xs font-medium text-slate-400">
-											Jl. Indraprasta No.107, Semarang
-										</p>
-									</div>
-								</div>
-								<ChevronRight size={18} className="text-slate-300" />
-							</div>
+			<div className="mb-5">
+				<div
+					onClick={() => navigate("/navigasi")}
+					className="relative overflow-hidden rounded-2xl shadow-sm bg-blue-600 cursor-pointer active:scale-[0.98] transition-transform">
+					<img
+						src="/banner.png"
+						alt="Promo Banner"
+						className="w-full h-auto object-cover block"
+						onError={(e) => {
+							const target = e.currentTarget;
+							target.style.display = "none";
+							const fallback = target.nextElementSibling as HTMLElement;
+							if (fallback) fallback.style.display = "flex";
+						}}
+					/>
+					<div className="hidden min-h-[120px] w-full items-center justify-between p-4 text-white bg-gradient-to-r from-blue-700 to-indigo-600">
+						<div className="max-w-[70%]">
+							<span className="bg-white/20 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+								Rute Pintar
+							</span>
+							<h3 className="text-base font-bold mt-1">Nyetir Bebas Banjir & Macet</h3>
 						</div>
 					</div>
 				</div>
+			</div>
 
-				{/* FLOATING MOBILE BOTTOM NAVIGATION BAR */}
-				<div className="absolute bottom-0 left-0 right-0 z-40 bg-white/90 backdrop-blur-lg border-t border-slate-100 px-6 py-2 pb-5 flex items-center justify-around">
+			{/* SEARCH BAR */}
+			<form onSubmit={handleSearchSubmit} className="relative mb-5">
+				<input
+					type="text"
+					value={searchQuery}
+					onChange={(e) => setSearchQuery(e.target.value)}
+					onClick={() => navigate("/navigasi")}
+					placeholder="Cari rute, tujuan, atau area..."
+					className="w-full rounded-2xl bg-white py-3.5 pl-11 pr-11 text-sm font-semibold text-slate-800 placeholder-slate-400 shadow-sm border border-slate-100 outline-none transition-all focus:ring-2 focus:ring-blue-500/20 active:scale-[0.99]"
+				/>
+				<Search className="absolute left-4 top-3.5 text-slate-400" size={18} />
+				<button
+					type="button"
+					onClick={() => navigate("/navigasi")}
+					className="absolute right-3 top-2.5 p-1 text-slate-400 hover:text-slate-600 active:scale-95">
+					<SlidersHorizontal size={18} />
+				</button>
+			</form>
+
+			{/* BANNER SECTION */}
+			<div className="mb-6">
+				<div className="flex items-center justify-between mb-3">
+					<h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+						Fitur Utama
+					</h2>
+				</div>
+				<div className="grid grid-cols-4 gap-3">
 					<button
-						onClick={() => navigate("/")}
-						className="flex flex-col items-center gap-1 text-blue-600 active:scale-90 transition-transform">
-						<HomeIcon size={20} className="stroke-[2.5]" />
-						<span className="text-[10px] font-extrabold">Beranda</span>
+						onClick={() => navigate("/navigasi")}
+						className="flex flex-col items-center gap-2 rounded-2xl bg-white p-3 shadow-sm border border-slate-100/80 active:scale-95 transition-all">
+						<div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+							<NavIcon size={22} />
+						</div>
+						<span className="text-[11px] font-bold text-slate-700">Rute Aman</span>
 					</button>
 
 					<button
 						onClick={() => navigate("/navigasi")}
-						className="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-600 active:scale-90 transition-transform">
-						<NavIcon size={20} />
-						<span className="text-[10px] font-bold">Navigasi</span>
+						className="flex flex-col items-center gap-2 rounded-2xl bg-white p-3 shadow-sm border border-slate-100/80 active:scale-95 transition-all">
+						<div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+							<AlertTriangle size={22} />
+						</div>
+						<span className="text-[11px] font-bold text-slate-700">Info Banjir</span>
 					</button>
 
 					<button
-						onClick={() => alert("Halaman Profil")}
-						className="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-600 active:scale-90 transition-transform">
-						<User size={20} />
-						<span className="text-[10px] font-bold">Profil</span>
+						onClick={() => navigate("/navigasi")}
+						className="flex flex-col items-center gap-2 rounded-2xl bg-white p-3 shadow-sm border border-slate-100/80 active:scale-95 transition-all">
+						<div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+							<Video size={22} />
+						</div>
+						<span className="text-[11px] font-bold text-slate-700">CCTV Live</span>
+					</button>
+
+					<button
+						onClick={() => navigate("/navigasi")}
+						className="flex flex-col items-center gap-2 rounded-2xl bg-white p-3 shadow-sm border border-slate-100/80 active:scale-95 transition-all">
+						<div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+							<Compass size={22} />
+						</div>
+						<span className="text-[11px] font-bold text-slate-700">Jelajah</span>
 					</button>
 				</div>
-			</main>
+			</div>
+
+			{/* RECENT DESTINATIONS LIST */}
+			<div>
+				<div className="flex items-center justify-between mb-3">
+					<h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+						Terakhir Dikunjungi
+					</h2>
+					<button
+						onClick={() => navigate("/navigasi")}
+						className="text-xs font-bold text-blue-600 active:opacity-70">
+						Lihat Semua
+					</button>
+				</div>
+
+				<div className="space-y-2.5">
+					<div
+						onClick={() => navigate("/navigasi")}
+						className="flex items-center justify-between rounded-2xl bg-white p-3.5 shadow-sm border border-slate-100/80 cursor-pointer active:scale-[0.98] transition-transform">
+						<div className="flex items-center gap-3">
+							<div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
+								<Clock size={18} />
+							</div>
+							<div>
+								<h4 className="text-sm font-bold text-slate-800">Tugu Muda Semarang</h4>
+								<p className="text-xs font-medium text-slate-400">
+									Sekayu, Semarang Tengah
+								</p>
+							</div>
+						</div>
+						<ChevronRight size={18} className="text-slate-300" />
+					</div>
+
+					<div
+						onClick={() => navigate("/navigasi")}
+						className="flex items-center justify-between rounded-2xl bg-white p-3.5 shadow-sm border border-slate-100/80 cursor-pointer active:scale-[0.98] transition-transform">
+						<div className="flex items-center gap-3">
+							<div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
+								<MapPin size={18} />
+							</div>
+							<div>
+								<h4 className="text-sm font-bold text-slate-800">Indraprasta</h4>
+								<p className="text-xs font-medium text-slate-400">
+									Jl. Indraprasta No.107, Semarang
+								</p>
+							</div>
+						</div>
+						<ChevronRight size={18} className="text-slate-300" />
+					</div>
+				</div>
+			</div>
 		</div>
 	);
 }
