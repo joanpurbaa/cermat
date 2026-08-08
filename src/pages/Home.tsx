@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { MapPin, Megaphone, LoaderCircle } from "lucide-react";
+import {
+	MapPin,
+	Megaphone,
+	LoaderCircle,
+	ArrowDown,
+	Video,
+} from "lucide-react";
 import L from "leaflet";
 import {
 	MapContainer,
@@ -10,18 +16,24 @@ import {
 } from "react-leaflet";
 
 import BackButton from "../components/BackButton";
-import LocationAutocomplete from "../components/LocationAutocomplete";
-import RouteStep from "../components/RouteStep";
-import { getFastestRoute, type LatLon, type RouteResult } from "../lib/routing";
+import LocationAutocomplete, {
+	formatCoord,
+	parseDualCoordPair,
+	type LatLon,
+} from "../components/LocationAutocomplete";
+import CctvModal from "../components/CctvModal";
+import {
+	getFloodAwareRoutes,
+	type RouteData,
+	type RouteInfo,
+} from "../lib/floodRoute";
 
 function FitRouteBounds({ coordinates }: { coordinates: LatLon[] }) {
 	const map = useMap();
-
 	useEffect(() => {
 		if (!coordinates.length) return;
 		map.fitBounds(L.latLngBounds(coordinates), { padding: [48, 48] });
 	}, [coordinates, map]);
-
 	return null;
 }
 
@@ -53,27 +65,42 @@ export default function Home() {
 	const [expanded, setExpanded] = useState(false);
 	const [originCoords, setOriginCoords] = useState<LatLon | null>(null);
 	const [destCoords, setDestCoords] = useState<LatLon | null>(null);
-	const [route, setRoute] = useState<RouteResult | null>(null);
+	const [originExternal, setOriginExternal] = useState<{
+		label: string;
+		coords: LatLon;
+	} | null>(null);
+	const [destExternal, setDestExternal] = useState<{
+		label: string;
+		coords: LatLon;
+	} | null>(null);
+	const [routeData, setRouteData] = useState<RouteData | null>(null);
+	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [activeCctv, setActiveCctv] = useState<{
+		name: string;
+		url: string;
+	} | null>(null);
 
 	useEffect(() => {
 		if (!originCoords || !destCoords) return;
-
 		let cancelled = false;
 		setLoading(true);
 		setError(null);
 
-		getFastestRoute(originCoords, destCoords)
-			.then((result) => {
+		getFloodAwareRoutes(originCoords, destCoords)
+			.then((data) => {
 				if (cancelled) return;
-				setRoute(result);
+				setRouteData(data);
+				setSelectedIndex(
+					data.recommended_route_index ?? data.routes[0]?.index ?? 0,
+				);
 				setExpanded(true);
 			})
 			.catch((err) => {
 				if (cancelled) return;
 				setError(err instanceof Error ? err.message : "Terjadi kesalahan");
-				setRoute(null);
+				setRouteData(null);
 			})
 			.finally(() => {
 				if (!cancelled) setLoading(false);
@@ -84,21 +111,46 @@ export default function Home() {
 		};
 	}, [originCoords, destCoords]);
 
-	const sheetHeight = expanded ? 420 : route ? 240 : 190;
+	function handleHeaderPaste(e: React.ClipboardEvent<HTMLDivElement>) {
+		const text = e.clipboardData.getData("text");
+		const dual = parseDualCoordPair(text);
+		if (!dual) return;
+		e.preventDefault();
+		setOriginCoords(dual.origin);
+		setDestCoords(dual.destination);
+		setOriginExternal({ label: formatCoord(dual.origin), coords: dual.origin });
+		setDestExternal({
+			label: formatCoord(dual.destination),
+			coords: dual.destination,
+		});
+	}
+
+	// FIX: cari route berdasarkan field `index`, bukan posisi array —
+	// posisi array bisa gak selaras kalau backend nge-skip/filter rute invalid.
+	const activeRoute: RouteInfo | null =
+		routeData?.routes.find((r) => r.index === selectedIndex) ??
+		routeData?.routes[0] ??
+		null;
+
+	const sheetHeight = expanded ? 460 : activeRoute ? 260 : 190;
 	const center = useMemo<LatLon>(
-		() => originCoords || [-6.9175, 107.6191],
+		() => originCoords || [-6.9667, 110.4167],
 		[originCoords],
 	);
 
 	return (
 		<main className="mx-auto flex h-screen w-[500px] flex-col overflow-hidden">
-			<div className="relative z-[1000] bg-gradient-to-b from-brand-50 to-white px-8 pt-8 pb-6">
+			<div
+				className="relative z-[1000] bg-gradient-to-b from-brand-50 to-white px-8 pt-8 pb-6"
+				onPaste={handleHeaderPaste}>
 				<BackButton title="Rute" />
 
 				<LocationAutocomplete
 					className="mt-7 relative z-[20]"
 					placeholder="Lokasi berangkat kamu"
+					Icon={ArrowDown}
 					onSelect={(coords) => setOriginCoords(coords)}
+					externalValue={originExternal}
 				/>
 
 				<LocationAutocomplete
@@ -106,6 +158,7 @@ export default function Home() {
 					placeholder="Titik tujuan kamu"
 					Icon={MapPin}
 					onSelect={(coords) => setDestCoords(coords)}
+					externalValue={destExternal}
 				/>
 
 				{error && (
@@ -127,13 +180,13 @@ export default function Home() {
 					{originCoords && <Marker position={originCoords} icon={liveIcon} />}
 					{destCoords && <Marker position={destCoords} icon={destinationIcon} />}
 
-					{route && (
+					{activeRoute && activeRoute.points?.length > 0 && (
 						<>
 							<Polyline
-								positions={route.coordinates}
+								positions={activeRoute.points}
 								pathOptions={{ color: "#2f8af0", weight: 5, opacity: 0.9 }}
 							/>
-							<FitRouteBounds coordinates={route.coordinates} />
+							<FitRouteBounds coordinates={activeRoute.points} />
 						</>
 					)}
 				</MapContainer>
@@ -154,47 +207,104 @@ export default function Home() {
 					{loading && (
 						<div className="flex items-center gap-3 text-ink-500">
 							<LoaderCircle size={18} className="animate-spin text-brand-500" />
-							<p className="text-sm">Mencari rute tercepat...</p>
+							<p className="text-sm">Mencari rute teraman dari banjir...</p>
 						</div>
 					)}
 
-					{!loading && !route && (
+					{!loading && !activeRoute && (
 						<p className="text-sm text-ink-500">
 							Masukkan lokasi berangkat dan tujuan untuk melihat rute tercepat.
 						</p>
 					)}
 
-					{!loading && route && (
+					{!loading && activeRoute && (
 						<>
 							<p className="font-display text-lg font-bold text-ink-900">
-								{route.durationMin} menit{" "}
+								{Math.round(activeRoute.travel_time_in_seconds / 60)} menit{" "}
 								<span className="font-medium text-ink-500">
-									&middot; {route.distanceKm.toFixed(1)} km
+									&middot; {(activeRoute.length_in_meters / 1000).toFixed(1)} km
 								</span>
 							</p>
 
-							<div className="mt-4 flex items-start gap-3 rounded-2xl bg-alert-50 px-4 py-3">
-								<Megaphone size={20} className="mt-0.5 shrink-0 text-alert-500" />
-								<p className="text-sm text-ink-900">
-									<span className="font-display font-semibold">Banjir</span> di Jl.
-									Soekarno Hatta
-								</p>
-							</div>
+							{activeRoute.floods.length === 0 ? (
+								<div className="mt-4 rounded-2xl bg-brand-50 px-4 py-3">
+									<p className="text-sm text-ink-900">
+										Tidak ada titik banjir terdeteksi di rute ini.
+									</p>
+								</div>
+							) : (
+								activeRoute.floods.map((flood, i) => (
+									<div
+										key={`${flood.name}-${i}`}
+										className="mt-3 flex items-start gap-3 rounded-2xl bg-alert-50 px-4 py-3">
+										<Megaphone size={20} className="mt-0.5 shrink-0 text-alert-500" />
+										<div className="min-w-0 flex-1">
+											<p className="text-sm text-ink-900">
+												<span className="font-display font-semibold">Banjir</span> di{" "}
+												{flood.name}{" "}
+												<span className="text-ink-500">
+													({Math.round(flood.flood_confidence * 100)}% yakin)
+												</span>
+											</p>
+											{flood.stream_url && (
+												<button
+													onClick={() =>
+														setActiveCctv({ name: flood.name, url: flood.stream_url! })
+													}
+													className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-alert-500 px-3 py-1.5 text-xs font-semibold text-white">
+													<Video size={14} />
+													Lihat CCTV Langsung
+												</button>
+											)}
+										</div>
+									</div>
+								))
+							)}
 
-							<div className="mt-7">
-								{route.steps.map((step) => (
-									<RouteStep
-										key={step.id}
-										title={step.title}
-										subtitle={step.subtitle}
-										isLast={step.isLast}
-									/>
-								))}
-							</div>
+							{routeData && routeData.routes.length > 1 && (
+								<div className="mt-7">
+									<p className="text-xs font-semibold uppercase tracking-wide text-ink-400">
+										Pilihan rute lain
+									</p>
+									<div className="mt-3 flex flex-col gap-2">
+										{routeData.routes.map((r) => (
+											<button
+												key={r.index}
+												onClick={() => setSelectedIndex(r.index)}
+												className={`flex items-center justify-between rounded-xl border px-4 py-3 text-left text-sm transition-colors ${
+													r.index === selectedIndex
+														? "border-brand-500 bg-brand-50"
+														: "border-ink-200 bg-white"
+												}`}>
+												<span className="font-medium text-ink-900">
+													{Math.round(r.travel_time_in_seconds / 60)} menit ·{" "}
+													{(r.length_in_meters / 1000).toFixed(1)} km
+												</span>
+												<span
+													className={`text-xs font-semibold ${
+														r.floods.length === 0 ? "text-brand-500" : "text-alert-500"
+													}`}>
+													{r.floods.length === 0
+														? "Aman"
+														: `${r.floods.length} titik banjir`}
+												</span>
+											</button>
+										))}
+									</div>
+								</div>
+							)}
 						</>
 					)}
 				</div>
 			</div>
+
+			{activeCctv && (
+				<CctvModal
+					name={activeCctv.name}
+					streamUrl={activeCctv.url}
+					onClose={() => setActiveCctv(null)}
+				/>
+			)}
 		</main>
 	);
 }
