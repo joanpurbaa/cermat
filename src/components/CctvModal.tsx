@@ -59,11 +59,11 @@ export default function CctvModal({
 
 	return (
 		<div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/70 px-6">
-			<div className="w-full max-w-md overflow-hidden rounded-2xl bg-ink-950">
-				<div className="flex items-center justify-between px-4 py-3">
-					<p className="text-sm font-semibold text-white">CCTV &middot; {name}</p>
+			<div className="w-full max-w-80 overflow-hidden rounded-lg bg-ink-950">
+				<div className="flex items-center justify-between px-4 py-3 bg-white">
+					<p className="text-sm font-semibold text-zinc-700">CCTV &middot; {name}</p>
 					<button onClick={onClose} className="rounded-full p-1 hover:bg-white/10">
-						<X size={18} className="text-white" />
+						<X size={18} className="text-zinc-700" />
 					</button>
 				</div>
 

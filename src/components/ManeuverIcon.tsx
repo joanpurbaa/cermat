@@ -70,7 +70,7 @@ export default function ManeuverIcon({
 		case "ARRIVE_RIGHT":
 		case "ARRIVE_AHEAD":
 		case "WAYPOINT_REACHED":
-			return <MapPin size={size} className="text-red-500" />;
+			return <MapPin size={size} className="text-white" />;
 
 		case "MERGE_LEFT_LANE":
 		case "EXIT_MOTORWAY_LEFT":

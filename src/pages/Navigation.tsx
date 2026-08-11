@@ -8,6 +8,11 @@ import {
 	Clock,
 	Compass,
 	ArrowLeft,
+	Video,
+	ListOrdered,
+	RouteIcon,
+	AlertTriangle,
+	ShieldCheck,
 } from "lucide-react";
 import L from "leaflet";
 import { MapContainer, Marker, Polyline, TileLayer } from "react-leaflet";
@@ -22,6 +27,8 @@ import {
 	type RouteData,
 	type RouteInfo,
 } from "../lib/floodRoute";
+import ManeuverIcon from "../components/ManeuverIcon";
+import CctvModal from "../components/CctvModal";
 
 const liveIcon = L.divIcon({
 	className: "",
@@ -73,6 +80,10 @@ export default function Navigation() {
 
 	const [originLabel, setOriginLabel] = useState<string>("");
 	const [destLabel, setDestLabel] = useState<string>("");
+
+	const [activeTab, setActiveTab] = useState<"routes" | "instructions">(
+		"routes",
+	);
 
 	const [currentLocation, setCurrentLocation] = useState<
 		[number, number] | null
@@ -127,9 +138,15 @@ export default function Navigation() {
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
+	const [activeCctv, setActiveCctv] = useState<{
+		name: string;
+		url: string;
+	} | null>(null);
+
 	useEffect(() => {
 		if (!originCoords || !destCoords) return;
 		let cancelled = false;
+		// eslint-disable-next-line react-hooks/set-state-in-effect
 		setLoading(true);
 		setError(null);
 
@@ -200,16 +217,25 @@ export default function Navigation() {
 		routeData?.routes[0] ??
 		null;
 
-	const { passedPoints, remainingPoints } = useMemo(() => {
+	const { passedPoints, remainingPoints, currentGuidanceIndex } = useMemo(() => {
 		if (!activeRoute || !activeRoute.points || activeRoute.points.length === 0) {
-			return { passedPoints: [], remainingPoints: [] };
+			return {
+				passedPoints: [],
+				remainingPoints: [],
+				currentGuidanceIndex: 0,
+			};
 		}
 
 		const userPos = currentLocation || originCoords;
 		if (!userPos) {
-			return { passedPoints: [], remainingPoints: activeRoute.points };
+			return {
+				passedPoints: [],
+				remainingPoints: activeRoute.points,
+				currentGuidanceIndex: 0,
+			};
 		}
 
+		// 1. Cari titik rute terdekat dari lokasi user
 		let closestIndex = 0;
 		let minDistance = Infinity;
 
@@ -221,11 +247,67 @@ export default function Navigation() {
 			}
 		});
 
+		const passed = activeRoute.points.slice(0, closestIndex + 1);
+		const remaining = activeRoute.points.slice(closestIndex);
+
+		// 2. Cari instruksi berikutnya berdasarkan jarak lokasi user ke titik instruksi (step.point)
+		let guidanceIdx = 0;
+		if (activeRoute.guidance && activeRoute.guidance.length > 0) {
+			let minGuidanceDist = Infinity;
+
+			activeRoute.guidance.forEach((g, gIdx) => {
+				if (
+					g.point &&
+					typeof g.point.lat === "number" &&
+					typeof g.point.lng === "number"
+				) {
+					const dist = getDistanceMeters(
+						[userPos[0], userPos[1]],
+						[g.point.lat, g.point.lng],
+					);
+
+					// Pilih instruksi terdekat yang ada di depan/di area lokasi user
+					if (dist < minGuidanceDist) {
+						minGuidanceDist = dist;
+						guidanceIdx = gIdx;
+					}
+				}
+			});
+		}
+
 		return {
-			passedPoints: activeRoute.points.slice(0, closestIndex + 1),
-			remainingPoints: activeRoute.points.slice(closestIndex),
+			passedPoints: passed,
+			remainingPoints: remaining,
+			currentGuidanceIndex: guidanceIdx,
 		};
 	}, [activeRoute, currentLocation, originCoords]);
+
+	// const { passedPoints, remainingPoints } = useMemo(() => {
+	// 	if (!activeRoute || !activeRoute.points || activeRoute.points.length === 0) {
+	// 		return { passedPoints: [], remainingPoints: [] };
+	// 	}
+
+	// 	const userPos = currentLocation || originCoords;
+	// 	if (!userPos) {
+	// 		return { passedPoints: [], remainingPoints: activeRoute.points };
+	// 	}
+
+	// 	let closestIndex = 0;
+	// 	let minDistance = Infinity;
+
+	// 	activeRoute.points.forEach((pt, idx) => {
+	// 		const dist = getDistanceMeters([userPos[0], userPos[1]], pt);
+	// 		if (dist < minDistance) {
+	// 			minDistance = dist;
+	// 			closestIndex = idx;
+	// 		}
+	// 	});
+
+	// 	return {
+	// 		passedPoints: activeRoute.points.slice(0, closestIndex + 1),
+	// 		remainingPoints: activeRoute.points.slice(closestIndex),
+	// 	};
+	// }, [activeRoute, currentLocation, originCoords]);
 
 	const sheetHeight = expanded ? 480 : activeRoute ? 280 : 180;
 	const center = useMemo<LatLon>(
@@ -375,7 +457,7 @@ export default function Navigation() {
 										<p className="truncate text-xs font-semibold text-slate-700">
 											{originLabel || "Tugu Muda Semarang"}
 										</p>
-										<div className="my-0.5 border-b border-slate-200/60" />
+										<div className="my-1.5 border-b border-slate-200/60" />
 										<p className="truncate text-xs font-bold text-slate-900">
 											{destLabel || "Indraprasta"}
 										</p>
@@ -447,6 +529,7 @@ export default function Navigation() {
 					<div
 						className="absolute bottom-0 left-0 right-0 z-[1000] flex flex-col rounded-t-[28px] bg-white shadow-[0_-8px_30px_rgba(0,0,0,0.12)] transition-all duration-300"
 						style={{ height: sheetHeight }}>
+						{/* Drag Handle */}
 						<button
 							onClick={() => setExpanded(!expanded)}
 							className="flex w-full cursor-pointer items-center justify-center py-2.5 hover:bg-slate-50/50 rounded-t-[28px]">
@@ -454,23 +537,236 @@ export default function Navigation() {
 						</button>
 
 						<div className="flex flex-1 flex-col justify-between overflow-hidden px-5 pb-5">
-							{activeRoute && (
-								<div className="mb-2.5">
-									<div className="flex items-center justify-between">
-										<div className="flex items-baseline gap-2">
-											<span className="text-2xl font-extrabold tracking-tight text-slate-900">
-												{Math.round(activeRoute.travel_time_in_seconds / 60)} mnt
-											</span>
-											<span className="text-xs font-semibold text-slate-400">
-												({(activeRoute.length_in_meters / 1000).toFixed(1)} km)
-											</span>
+							<div className="flex flex-col overflow-hidden">
+								{/* 1. HEADER RINGKASAN RUTE (YANG SEBELUMNYA HILANG) */}
+								{activeRoute && (
+									<div className="mb-2.5">
+										<div className="flex items-center justify-between">
+											<div className="flex items-baseline gap-2">
+												<span className="text-2xl font-extrabold tracking-tight text-slate-900">
+													{Math.round(activeRoute.travel_time_in_seconds / 60)} mnt
+												</span>
+												<span className="text-xs font-semibold text-slate-400">
+													({(activeRoute.length_in_meters / 1000).toFixed(1)} km)
+												</span>
+											</div>
+
+											{activeRoute.floods.length === 0 ? (
+												<span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-700">
+													<ShieldCheck size={14} /> Bebas Banjir
+												</span>
+											) : (
+												<span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-extrabold text-amber-800">
+													<AlertTriangle size={14} /> {activeRoute.floods.length} Titik
+													Banjir
+												</span>
+											)}
 										</div>
 									</div>
+								)}
+
+								{/* 2. KARTU BIRU PETUNJUK SELANJUTNYA (Diletakkan di atas Tab) */}
+								{activeRoute && activeRoute.guidance?.[currentGuidanceIndex] && (
+									<div className="mb-3 rounded-2xl bg-blue-600 p-3.5 text-white shadow-md flex items-center gap-3.5 transition-all">
+										<div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/20 backdrop-blur-md">
+											<ManeuverIcon
+												maneuver={activeRoute.guidance[currentGuidanceIndex].maneuver}
+												size={24}
+												className="text-white"
+											/>
+										</div>
+
+										<div className="flex-1 min-w-0">
+											<p className="text-[10px] font-extrabold uppercase tracking-wider text-blue-100">
+												Petunjuk Selanjutnya
+											</p>
+											<h3 className="text-xs font-black truncate leading-tight">
+												{activeRoute.guidance[currentGuidanceIndex].message}
+											</h3>
+											{activeRoute.guidance[currentGuidanceIndex].street && (
+												<p className="text-[11px] text-blue-100/90 truncate mt-0.5">
+													Ke {activeRoute.guidance[currentGuidanceIndex].street}
+												</p>
+											)}
+										</div>
+									</div>
+								)}
+
+								{/* 3. TAB SELECTOR */}
+								<div className="mb-2 flex rounded-xl bg-slate-100 p-1">
+									<button
+										onClick={() => setActiveTab("routes")}
+										className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-bold transition-all ${
+											activeTab === "routes"
+												? "bg-white text-blue-600 shadow-sm"
+												: "text-slate-500 hover:text-slate-800"
+										}`}>
+										<RouteIcon size={14} />
+										Pilihan Rute
+									</button>
+									<button
+										onClick={() => {
+											setActiveTab("instructions");
+											if (!expanded) setExpanded(true);
+										}}
+										className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-bold transition-all ${
+											activeTab === "instructions"
+												? "bg-white text-blue-600 shadow-sm"
+												: "text-slate-500 hover:text-slate-800"
+										}`}>
+										<ListOrdered size={14} />
+										Petunjuk Arah
+									</button>
 								</div>
-							)}
+
+								{/* 4. DAFTAR KONTEN TAB */}
+								<div
+									className="overflow-y-auto pr-1 no-scrollbar mt-1"
+									style={{ maxHeight: sheetHeight - 220 }}>
+									{/* TAB 1: PILIHAN RUTE */}
+									{activeTab === "routes" &&
+										routeData &&
+										routeData.routes.length > 0 && (
+											<div className="space-y-2">
+												<p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+													Rekomendasi Jalur
+												</p>
+												<div className="flex flex-col gap-2">
+													{routeData.routes.map((r) => {
+														const isSelected = r.index === selectedIndex;
+														const isSafe = r.floods.length === 0;
+
+														return (
+															<div
+																key={r.index}
+																onClick={() => setSelectedIndex(r.index)}
+																className={`flex cursor-pointer items-center justify-between rounded-xl border p-3 transition-all active:scale-[0.99] ${
+																	isSelected
+																		? "border-blue-600 bg-blue-50/40 shadow-sm"
+																		: "border-slate-200 bg-white hover:border-slate-300"
+																}`}>
+																<div>
+																	<div className="flex items-center gap-2">
+																		<span className="text-sm font-bold text-slate-900">
+																			{Math.round(r.travel_time_in_seconds / 60)} mnt
+																		</span>
+																		{isSafe && (
+																			<span className="text-[10px] font-extrabold text-blue-600 uppercase tracking-wide">
+																				• Rute Teraman
+																			</span>
+																		)}
+																	</div>
+																	<span className="text-xs font-medium text-slate-400">
+																		{(r.length_in_meters / 1000).toFixed(1)} km
+																	</span>
+																</div>
+
+																<div className="flex items-center gap-2">
+																	{r.floods.length > 0 && r.floods[0].stream_url && (
+																		<button
+																			onClick={(e) => {
+																				e.stopPropagation();
+																				setActiveCctv({
+																					name: r.floods[0].name,
+																					url: r.floods[0].stream_url!,
+																				});
+																			}}
+																			className="inline-flex items-center gap-1 rounded-lg border border-amber-400 bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-700 shadow-sm transition-colors hover:bg-amber-100 active:scale-95">
+																			<Video size={12} /> CCTV
+																		</button>
+																	)}
+																	<span
+																		className={`rounded-lg px-2 py-1 text-[11px] font-bold ${
+																			isSafe
+																				? "bg-emerald-100 text-emerald-700"
+																				: "bg-amber-100 text-amber-800"
+																		}`}>
+																		{isSafe ? "Aman" : `${r.floods.length} Banjir`}
+																	</span>
+																</div>
+															</div>
+														);
+													})}
+												</div>
+											</div>
+										)}
+
+									{/* TAB 2: TIMELINE PETUNJUK ARAH */}
+									{activeTab === "instructions" && (
+										<div className="py-1">
+											{activeRoute?.guidance && activeRoute.guidance.length > 0 ? (
+												<div className="relative border-l-2 border-slate-200 ml-4 space-y-3 my-2 pr-1">
+													{activeRoute.guidance.map((step, idx) => {
+														const isCurrentStep = idx === currentGuidanceIndex;
+														const isPassedStep = idx < currentGuidanceIndex;
+
+														return (
+															<div
+																key={idx}
+																className={`relative pl-6 transition-all ${
+																	isPassedStep ? "opacity-40" : "opacity-100"
+																}`}>
+																<div
+																	className={`absolute -left-[17px] top-0 flex h-8 w-8 items-center justify-center rounded-full border transition-all ${
+																		isCurrentStep
+																			? "bg-blue-600 border-blue-600 text-white shadow-md ring-4 ring-blue-100"
+																			: "bg-white border-slate-200 text-slate-700"
+																	}`}>
+																	<ManeuverIcon
+																		maneuver={step.maneuver}
+																		size={16}
+																		className={isCurrentStep ? "text-white" : "text-slate-700"}
+																	/>
+																</div>
+
+																<div
+																	className={`rounded-xl p-2.5 transition-all ${
+																		isCurrentStep
+																			? "bg-blue-50/80 border border-blue-200 shadow-sm"
+																			: "bg-transparent"
+																	}`}>
+																	<div className="flex items-center justify-between gap-2">
+																		<h4
+																			className={`text-xs leading-tight ${
+																				isCurrentStep
+																					? "font-black text-blue-700"
+																					: "font-extrabold text-slate-900"
+																			}`}>
+																			{step.message}
+																		</h4>
+																		{isCurrentStep && (
+																			<span className="shrink-0 rounded-full bg-blue-600 px-2 py-0.5 text-[9px] font-extrabold uppercase text-white">
+																				Aktif
+																			</span>
+																		)}
+																	</div>
+
+																	{step.street && (
+																		<p className="text-[11px] font-medium text-slate-500 mt-0.5">
+																			Ke {step.street}
+																		</p>
+																	)}
+																</div>
+															</div>
+														);
+													})}
+												</div>
+											) : null}
+										</div>
+									)}
+								</div>
+							</div>
 						</div>
 					</div>
 				</div>
+			)}
+
+			{activeCctv && (
+				<CctvModal
+					name={activeCctv.name}
+					streamUrl={activeCctv.url}
+					onClose={() => setActiveCctv(null)}
+				/>
 			)}
 		</div>
 	);
