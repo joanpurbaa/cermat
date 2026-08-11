@@ -246,7 +246,7 @@ export default function LocationAutocomplete({
 							className="flex w-full flex-col items-start gap-0.5 border-b border-ink-100 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-brand-50">
 							<span className="text-[14px] font-medium text-ink-900">{s.label}</span>
 							{s.sublabel && (
-								<span className="text-[12px] text-ink-400">{s.sublabel}</span>
+								<span className="text-black text-[12px] text-ink-400">{s.sublabel}</span>
 							)}
 						</button>
 					))}
