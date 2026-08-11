@@ -9,7 +9,6 @@ import {
 	Clock,
 	MapPin,
 	ChevronRight,
-	Bell,
 	SlidersHorizontal,
 } from "lucide-react";
 
@@ -34,10 +33,6 @@ export default function Home() {
 						Mau ke mana hari ini?
 					</h1>
 				</div>
-				<button className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-700 shadow-sm border border-slate-100 active:scale-90 transition-transform">
-					<Bell size={18} />
-					<span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
-				</button>
 			</div>
 
 			<div className="mb-5">
