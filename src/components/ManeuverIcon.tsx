@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 
 interface ManeuverIconProps {
-	maneuver: string;
+	maneuver?: string;
 	className?: string;
 	size?: number;
 }
