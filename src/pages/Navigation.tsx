@@ -553,7 +553,7 @@ export default function Navigation() {
 
 											{activeRoute.floods.length === 0 ? (
 												<span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-700">
-													<ShieldCheck size={14} /> Bebas Banjir
+													<ShieldCheck size={14} /> Bebas Anomali
 												</span>
 											) : (
 												<span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-extrabold text-amber-800">
@@ -662,7 +662,8 @@ export default function Navigation() {
 																</div>
 
 																<div className="flex items-center gap-2">
-																	{r.floods.length > 0 && r.floods[0].stream_url && (
+																	{r.floods.length > 0 && r.floods[0].stream_url ? (
+																		// KONDISI ANOMALY: styling amber, warning
 																		<button
 																			onClick={(e) => {
 																				e.stopPropagation();
@@ -674,7 +675,21 @@ export default function Navigation() {
 																			className="inline-flex items-center gap-1 rounded-lg border border-amber-400 bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-700 shadow-sm transition-colors hover:bg-amber-100 active:scale-95">
 																			<Video size={12} /> CCTV
 																		</button>
-																	)}
+																	) : r.nearest_cctv ? (
+																		// KONDISI NORMAL: kamera tetap ada, styling netral biru
+																		<button
+																			onClick={(e) => {
+																				e.stopPropagation();
+																				setActiveCctv({
+																					name: r.nearest_cctv!.name,
+																					url: r.nearest_cctv!.stream_url,
+																				});
+																			}}
+																			className="inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-blue-50 px-2 py-1 text-[11px] font-bold text-blue-700 shadow-sm transition-colors hover:bg-blue-100 active:scale-95">
+																			<Video size={12} /> Lihat CCTV
+																		</button>
+																	) : null}
+
 																	<span
 																		className={`rounded-lg px-2 py-1 text-[11px] font-bold ${
 																			isSafe

@@ -53,6 +53,18 @@ export interface Instruction {
 	instruction?: string;
 }
 
+/**
+ * Kamera CCTV statis di sepanjang kota, lepas dari deteksi anomaly/flood.
+ * Dipakai sebagai fallback agar user tetap bisa cek kondisi jalan secara
+ * visual walau model belum mendeteksi (atau salah mendeteksi) anomali.
+ */
+export interface CctvCamera {
+	name: string;
+	lat: number;
+	lng: number;
+	stream_url: string;
+}
+
 export interface RouteInfo {
 	index: number;
 	length_in_meters: number;
@@ -73,6 +85,10 @@ export interface RouteInfo {
 	flood_risk?: "safe" | "warning" | "danger" | string;
 	is_safe?: boolean;
 	cctv?: CctvInfo | null;
+
+	// CCTV terdekat di sepanjang rute ini, ADA/TIDAKNYA anomaly.
+	// null kalau tidak ada kamera dalam radius yang ditentukan.
+	nearest_cctv?: CctvCamera | null;
 }
 
 export interface RouteData {
@@ -94,6 +110,60 @@ const BASE_URL =
 	"https://semarangvision.chevalierlabsas.org";
 
 /**
+ * Registry kamera CCTV kota (mis. ATCS Dishub Semarang / open data kota).
+ * TODO: isi dengan data kamera asli (nama, koordinat, stream_url).
+ * Registry ini independen dari hasil deteksi model — jadi kamera tetap
+ * bisa ditampilkan meskipun kondisi jalan "normal" menurut model.
+ */
+export const CCTV_REGISTRY: CctvCamera[] = [
+	// { name: "CCTV Simpang Lima", lat: -6.9899, lng: 110.4229, stream_url: "https://..." },
+	// { name: "CCTV Tugu Muda", lat: -6.9826, lng: 110.4091, stream_url: "https://..." },
+	// { name: "CCTV Kalibanteng", lat: -6.9722, lng: 110.3838, stream_url: "https://..." },
+];
+
+/** Jarak Haversine antara dua koordinat, dalam meter. */
+function getDistanceMeters(coord1: LatLon, coord2: LatLon): number {
+	const R = 6371e3;
+	const dLat = ((coord2[0] - coord1[0]) * Math.PI) / 180;
+	const dLng = ((coord2[1] - coord1[1]) * Math.PI) / 180;
+	const a =
+		Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+		Math.cos((coord1[0] * Math.PI) / 180) *
+			Math.cos((coord2[0] * Math.PI) / 180) *
+			Math.sin(dLng / 2) *
+			Math.sin(dLng / 2);
+	const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+	return R * c;
+}
+
+/**
+ * Cari kamera CCTV terdekat dari titik-titik rute, dalam radius tertentu (meter).
+ * Berjalan independen dari status anomaly/flood, sehingga user tetap bisa
+ * memantau kondisi jalan secara visual walau tidak ada alert dari model.
+ */
+function findNearestCctv(
+	points: LatLon[],
+	maxDistanceM = 300,
+): CctvCamera | null {
+	if (CCTV_REGISTRY.length === 0 || points.length === 0) return null;
+
+	let best: CctvCamera | null = null;
+	let bestDist = Infinity;
+
+	for (const cam of CCTV_REGISTRY) {
+		for (const pt of points) {
+			const d = getDistanceMeters(pt, [cam.lat, cam.lng]);
+			if (d < bestDist && d <= maxDistanceM) {
+				bestDist = d;
+				best = cam;
+			}
+		}
+	}
+
+	return best;
+}
+
+/**
  * Memproses dan melakukan normalisasi data rute agar siap digunakan oleh UI React.
  */
 function normalizeRouteData(data: RouteData): RouteData {
@@ -103,7 +173,7 @@ function normalizeRouteData(data: RouteData): RouteData {
 		const floodList = route.floods || [];
 		const totalIssues = anomalyList.length + floodList.length;
 
-		// 1. Ekstrak CCTV jika ada
+		// 1. Ekstrak CCTV anomaly jika ada
 		const activeCctvStream =
 			anomalyList.find((a) => a.stream_url)?.stream_url ||
 			floodList.find((f) => f.stream_url)?.stream_url;
@@ -141,6 +211,12 @@ function normalizeRouteData(data: RouteData): RouteData {
 						stream_url: a.stream_url || undefined,
 					}));
 
+		// 5. CCTV terdekat di sepanjang rute ini (ada/tidak ada anomaly).
+		// Ini fallback agar user tetap bisa lihat kondisi jalan secara visual.
+		const nearestCctv = route.points?.length
+			? findNearestCctv(route.points)
+			: null;
+
 		return {
 			...route,
 			summary_name: summaryName,
@@ -149,6 +225,7 @@ function normalizeRouteData(data: RouteData): RouteData {
 			cctv,
 			guidance,
 			floods: normalizedFloods,
+			nearest_cctv: nearestCctv,
 		};
 	});
 
