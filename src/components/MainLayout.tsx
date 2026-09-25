@@ -11,23 +11,38 @@ import {
 	Wifi,
 	Battery,
 } from "lucide-react";
+import type { LatLon } from "../lib/visionApi";
+
+interface DemoStop {
+	name: string;
+	coords: LatLon;
+}
+
+interface DemoRoute {
+	id: number;
+	title: string;
+	origin: DemoStop;
+	destination: DemoStop;
+	tag: string;
+	description: string;
+}
 
 export default function MainLayout() {
 	const navigate = useNavigate();
 	const location = useLocation();
 
 	// Preset rute ter-training
-	const demoRoutes = [
+	const demoRoutes: DemoRoute[] = [
 		{
 			id: 1,
 			title: "Rute 1: Tugu Muda → Indraprasta",
 			origin: {
 				name: "Tugu Muda Semarang",
-				coords: [-6.984, 110.409] as [number, number],
+				coords: [-6.984, 110.409],
 			},
 			destination: {
 				name: "Indraprasta",
-				coords: [-6.978, 110.404] as [number, number],
+				coords: [-6.978, 110.404],
 			},
 			tag: "Model AI Optimized",
 			description: "Titik CCTV: perempatan Sadewa & Indraprasta.",
@@ -37,11 +52,11 @@ export default function MainLayout() {
 			title: "Rute 2: Lawang Sewu → Paragon Mall",
 			origin: {
 				name: "Lawang Sewu",
-				coords: [-6.9839, 110.4104] as [number, number],
+				coords: [-6.9839, 110.4104],
 			},
 			destination: {
 				name: "Pollux Paragon Mall",
-				coords: [-6.98, 110.4147] as [number, number],
+				coords: [-6.98, 110.4147],
 			},
 			tag: "CCTV Active",
 			description: "Titik CCTV: sepanjang Jl. Pemuda depan Paragon.",
@@ -51,18 +66,18 @@ export default function MainLayout() {
 			title: "Rute 3: Metro Johar → Pemuda Gajah Mada",
 			origin: {
 				name: "Metro Johar",
-				coords: [-6.9744, 110.4242] as [number, number],
+				coords: [-6.9744, 110.4242],
 			},
 			destination: {
 				name: "Pemuda Gajah Mada",
-				coords: [-6.9805, 110.4225] as [number, number],
+				coords: [-6.9805, 110.4225],
 			},
 			tag: "Multi-Risk Avoidance",
 			description: "Titik CCTV: kawasan Johar & Gajah Mada.",
 		},
 	];
 
-	const handleSelectPreset = (origin: any, destination: any) => {
+	const handleSelectPreset = (origin: DemoStop, destination: DemoStop) => {
 		navigate("/navigasi");
 		setTimeout(() => {
 			window.dispatchEvent(

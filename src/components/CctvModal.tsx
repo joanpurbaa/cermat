@@ -4,12 +4,14 @@ import { X, Loader2, TriangleAlert } from "lucide-react";
 interface CctvModalProps {
 	streamUrl: string;
 	name: string;
+	subtitle?: string;
 	onClose: () => void;
 }
 
 export default function CctvModal({
 	streamUrl,
 	name,
+	subtitle,
 	onClose,
 }: CctvModalProps) {
 	const videoRef = useRef<HTMLVideoElement>(null);
@@ -20,11 +22,16 @@ export default function CctvModal({
 		const video = videoRef.current;
 		if (!video) return;
 
+		setStatus("loading");
+
 		async function setup() {
 			// Safari & beberapa browser mobile support HLS native
 			if (video!.canPlayType("application/vnd.apple.mpegurl")) {
 				video!.src = streamUrl;
-				video!.addEventListener("loadedmetadata", () => setStatus("ready"));
+				video!.addEventListener("loadedmetadata", () => {
+					setStatus("ready");
+					video!.play().catch(() => {});
+				});
 				video!.addEventListener("error", () => setStatus("error"));
 				return;
 			}
@@ -61,7 +68,16 @@ export default function CctvModal({
 		<div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/70 px-6">
 			<div className="w-full max-w-80 overflow-hidden rounded-lg bg-ink-950">
 				<div className="flex items-center justify-between px-4 py-3 bg-white">
-					<p className="text-sm font-semibold text-zinc-700">CCTV &middot; {name}</p>
+					<div className="min-w-0">
+						<p className="truncate text-sm font-semibold text-zinc-700">
+							CCTV &middot; {name}
+						</p>
+						{subtitle && (
+							<p className="truncate text-[11px] font-medium text-zinc-400">
+								{subtitle}
+							</p>
+						)}
+					</div>
 					<button onClick={onClose} className="rounded-full p-1 hover:bg-white/10">
 						<X size={18} className="text-zinc-700" />
 					</button>

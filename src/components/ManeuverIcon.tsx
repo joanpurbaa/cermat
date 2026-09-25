@@ -29,6 +29,8 @@ export default function ManeuverIcon({
 			return <Compass size={size} className={className} />;
 
 		case "STRAIGHT":
+		case "ROUNDABOUT_STRAIGHT":
+		case "ROUNDABOUT_CROSS":
 			return <ArrowUp size={size} className={className} />;
 
 		case "TURN_LEFT":
@@ -37,6 +39,7 @@ export default function ManeuverIcon({
 
 		case "SLIGHT_LEFT":
 		case "KEEP_LEFT":
+		case "BEAR_LEFT":
 			return <ArrowUpLeft size={size} className={className} />;
 
 		case "TURN_RIGHT":
@@ -45,14 +48,12 @@ export default function ManeuverIcon({
 
 		case "SLIGHT_RIGHT":
 		case "KEEP_RIGHT":
+		case "BEAR_RIGHT":
 			return <ArrowUpRight size={size} className={className} />;
 
 		case "MAKE_UTURN":
 		case "ROUNDABOUT_BACK":
 			return <RotateCcw size={size} className={className} />;
-
-		case "ROUNDABOUT_STRAIGHT":
-			return <ArrowUp size={size} className={className} />;
 
 		case "ROUNDABOUT_LEFT":
 		case "ROUNDABOUT_SHARP_LEFT":
@@ -63,6 +64,7 @@ export default function ManeuverIcon({
 		case "ROUNDABOUT_SHARP_RIGHT":
 		case "ROUNDABOUT_SLIGHT_RIGHT":
 		case "EXIT_ROUNDABOUT":
+		case "TAKE_EXIT":
 			return <CornerUpRight size={size} className={className} />;
 
 		case "ARRIVE":

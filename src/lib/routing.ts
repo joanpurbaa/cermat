@@ -21,6 +21,28 @@ export type RouteResult = {
 	steps: RouteStepData[];
 };
 
+interface OsrmStep {
+	name?: string;
+	maneuver?: {
+		type?: string;
+		modifier?: string;
+	};
+}
+
+interface OsrmRoute {
+	distance: number;
+	duration: number;
+	geometry: { coordinates: [number, number][] };
+	legs: { steps: OsrmStep[] }[];
+}
+
+interface NominatimPlace {
+	place_id: number | string;
+	display_name: string;
+	lat: string;
+	lon: string;
+}
+
 const MODIFIER_LABEL: Record<string, string> = {
 	left: "Belok Kiri",
 	right: "Belok Kanan",
@@ -32,7 +54,7 @@ const MODIFIER_LABEL: Record<string, string> = {
 	uturn: "Putar Balik",
 };
 
-function describeStep(step: any, isLast: boolean): RouteStepData {
+function describeStep(step: OsrmStep, isLast: boolean): RouteStepData {
 	const name = step.name || "jalan berikutnya";
 	const type = step.maneuver?.type;
 	const modifier = step.maneuver?.modifier;
@@ -60,7 +82,7 @@ function describeStep(step: any, isLast: boolean): RouteStepData {
 		};
 	}
 
-	const title = MODIFIER_LABEL[modifier] || "Lanjutkan";
+	const title = (modifier ? MODIFIER_LABEL[modifier] : undefined) || "Lanjutkan";
 	return {
 		id: `${type}-${modifier}-${name}`,
 		title,
@@ -85,8 +107,8 @@ export async function searchPlaces(
 	const res = await fetch(url, { signal });
 	if (!res.ok) throw new Error("Gagal menghubungi layanan lokasi");
 
-	const data = await res.json();
-	return data.map((item: any) => {
+	const data = (await res.json()) as NominatimPlace[];
+	return data.map((item) => {
 		const parts = item.display_name.split(",").map((p: string) => p.trim());
 		return {
 			id: item.place_id.toString(),
@@ -105,7 +127,7 @@ export async function getFastestRoute(
 	const res = await fetch(url);
 	if (!res.ok) throw new Error("Gagal mengambil rute");
 
-	const data = await res.json();
+	const data = (await res.json()) as { code?: string; routes?: OsrmRoute[] };
 	if (data.code !== "Ok" || !data.routes?.length)
 		throw new Error("Rute tidak ditemukan");
 
@@ -119,7 +141,7 @@ export async function getFastestRoute(
 		]),
 		distanceKm: route.distance / 1000,
 		durationMin: Math.round(route.duration / 60),
-		steps: rawSteps.map((step: any, i: number) =>
+		steps: rawSteps.map((step: OsrmStep, i: number) =>
 			describeStep(step, i === rawSteps.length - 1),
 		),
 	};

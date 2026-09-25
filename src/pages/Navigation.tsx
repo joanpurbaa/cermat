@@ -15,18 +15,28 @@ import {
 	ShieldCheck,
 } from "lucide-react";
 import L from "leaflet";
-import { MapContainer, Marker, Polyline, TileLayer } from "react-leaflet";
+import {
+	CircleMarker,
+	MapContainer,
+	Marker,
+	Polyline,
+	Popup,
+	TileLayer,
+} from "react-leaflet";
 
 import LocationAutocomplete, {
 	formatCoord,
 	parseDualCoordPair,
-	type LatLon,
 } from "../components/LocationAutocomplete";
 import {
-	getFloodAwareRoutes,
-	type RouteData,
-	type RouteInfo,
-} from "../lib/floodRoute";
+	getSafeRoutes,
+	getVisionApiHealth,
+	VisionApiError,
+	type LatLon,
+	type RouteView,
+	type SafeRoutes,
+	type VisionHealth,
+} from "../lib/visionApi";
 import ManeuverIcon from "../components/ManeuverIcon";
 import CctvModal from "../components/CctvModal";
 
@@ -65,11 +75,20 @@ function getDistanceMeters(
 		Math.sin(dLat / 2) * Math.sin(dLat / 2) +
 		Math.cos((coord1[0] * Math.PI) / 180) *
 			Math.cos((coord2[0] * Math.PI) / 180) *
-			Math.sin(dLng / 2) *
-			Math.sin(dLng / 2);
+			Math.sin(dLng / 2) * Math.sin(dLng / 2);
 	const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 	return R * c;
 }
+
+const ANOMALY_COLORS: Record<string, string> = {
+	kemacetan: "#F59E0B",
+	pohon_tumbang: "#16A34A",
+	konstruksi: "#7C3AED",
+	kecelakaan: "#DC2626",
+};
+
+const GUIDANCE_TOLERANCE_METERS = 30;
+
 
 export default function Navigation() {
 	const [screenState, setScreenState] = useState<"search" | "route">("search");
@@ -106,8 +125,13 @@ export default function Navigation() {
 
 	// Event listener untuk preset rute dari panel kanan MainLayout
 	useEffect(() => {
-		const handlePresetSelect = (e: CustomEvent) => {
-			const { origin, destination } = e.detail;
+		const handlePresetSelect = (e: Event) => {
+			const { origin, destination } = (
+				e as CustomEvent<{
+					origin: { name: string; coords: LatLon };
+					destination: { name: string; coords: LatLon };
+				}>
+			).detail;
 			setOriginCoords(origin.coords);
 			setDestCoords(destination.coords);
 			setOriginLabel(origin.name);
@@ -118,9 +142,9 @@ export default function Navigation() {
 			setDestExternal({ label: destination.name, coords: destination.coords });
 		};
 
-		window.addEventListener("SELECT_PRESET_ROUTE" as any, handlePresetSelect);
+		window.addEventListener("SELECT_PRESET_ROUTE", handlePresetSelect);
 		return () => {
-			window.removeEventListener("SELECT_PRESET_ROUTE" as any, handlePresetSelect);
+			window.removeEventListener("SELECT_PRESET_ROUTE", handlePresetSelect);
 		};
 	}, []);
 
@@ -133,15 +157,30 @@ export default function Navigation() {
 		coords: LatLon;
 	} | null>(null);
 
-	const [routeData, setRouteData] = useState<RouteData | null>(null);
+	const [routeData, setRouteData] = useState<SafeRoutes | null>(null);
 	const [selectedIndex, setSelectedIndex] = useState(0);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [errorDetail, setErrorDetail] = useState<string | null>(null);
+	const [reloadKey, setReloadKey] = useState(0);
+	const [health, setHealth] = useState<VisionHealth | null>(null);
 
 	const [activeCctv, setActiveCctv] = useState<{
 		name: string;
 		url: string;
+		label?: string;
 	} | null>(null);
+
+	useEffect(() => {
+		let cancelled = false;
+		getVisionApiHealth().then((result) => {
+			if (!cancelled) setHealth(result);
+		});
+
+		return () => {
+			cancelled = true;
+		};
+	}, []);
 
 	useEffect(() => {
 		if (!originCoords || !destCoords) return;
@@ -149,20 +188,36 @@ export default function Navigation() {
 		// eslint-disable-next-line react-hooks/set-state-in-effect
 		setLoading(true);
 		setError(null);
+		setErrorDetail(null);
 
-		getFloodAwareRoutes(originCoords, destCoords)
+		getSafeRoutes(originCoords, destCoords)
 			.then((data) => {
 				if (cancelled) return;
+				if (data.routes.length === 0) {
+					setRouteData(null);
+					setError("Tidak ada rute yang bisa dihitung untuk tujuan tersebut.");
+					return;
+				}
+				const recommended =
+					data.routes.find((r) => r.index === data.recommended_route_index) ??
+					data.routes[0];
 				setRouteData(data);
-				setSelectedIndex(
-					data.recommended_route_index ?? data.routes[0]?.index ?? 0,
-				);
+				setSelectedIndex(recommended.index);
 				setScreenState("route");
 			})
 			.catch((err) => {
 				if (cancelled) return;
-				setError(err instanceof Error ? err.message : "Terjadi kesalahan rute");
+				if (err instanceof VisionApiError) {
+					setError(err.message);
+					setErrorDetail(err.serverMessage);
+				} else {
+					setError("Terjadi kesalahan saat menghitung rute.");
+					setErrorDetail(err instanceof Error ? err.message : null);
+				}
 				setRouteData(null);
+				getVisionApiHealth().then((result) => {
+					if (!cancelled) setHealth(result);
+				});
 			})
 			.finally(() => {
 				if (!cancelled) setLoading(false);
@@ -171,7 +226,7 @@ export default function Navigation() {
 		return () => {
 			cancelled = true;
 		};
-	}, [originCoords, destCoords]);
+	}, [originCoords, destCoords, reloadKey]);
 
 	function handleHeaderPaste(e: React.ClipboardEvent<HTMLDivElement>) {
 		const text = e.clipboardData.getData("text");
@@ -212,7 +267,7 @@ export default function Navigation() {
 		setDestExternal({ label: "Indraprasta", coords: defaultDest });
 	};
 
-	const activeRoute: RouteInfo | null =
+	const activeRoute: RouteView | null =
 		routeData?.routes.find((r) => r.index === selectedIndex) ??
 		routeData?.routes[0] ??
 		null;
@@ -250,9 +305,32 @@ export default function Navigation() {
 		const passed = activeRoute.points.slice(0, closestIndex + 1);
 		const remaining = activeRoute.points.slice(closestIndex);
 
-		// 2. Cari instruksi berikutnya berdasarkan jarak lokasi user ke titik instruksi (step.point)
+		// 2. Jarak yang sudah ditempuh mengikuti polyline rute
+		let traveledMeters = 0;
+		for (let i = 1; i <= closestIndex; i++) {
+			traveledMeters += getDistanceMeters(
+				activeRoute.points[i - 1],
+				activeRoute.points[i],
+			);
+		}
+
+		// 3. Petunjuk aktif = instruksi terakhir yang sudah terlewati
+		//    (route_offset_in_meters berasal dari TomTom via backend)
 		let guidanceIdx = 0;
-		if (activeRoute.guidance && activeRoute.guidance.length > 0) {
+		const hasOffsets = activeRoute.guidance.some(
+			(g) => (g.route_offset_in_meters ?? 0) > 0,
+		);
+
+		if (hasOffsets) {
+			activeRoute.guidance.forEach((g, gIdx) => {
+				if (
+					(g.route_offset_in_meters ?? 0) <=
+					traveledMeters + GUIDANCE_TOLERANCE_METERS
+				) {
+					guidanceIdx = gIdx;
+				}
+			});
+		} else if (activeRoute.guidance.length > 0) {
 			let minGuidanceDist = Infinity;
 
 			activeRoute.guidance.forEach((g, gIdx) => {
@@ -266,7 +344,6 @@ export default function Navigation() {
 						[g.point.lat, g.point.lng],
 					);
 
-					// Pilih instruksi terdekat yang ada di depan/di area lokasi user
 					if (dist < minGuidanceDist) {
 						minGuidanceDist = dist;
 						guidanceIdx = gIdx;
@@ -309,7 +386,7 @@ export default function Navigation() {
 	// 	};
 	// }, [activeRoute, currentLocation, originCoords]);
 
-	const sheetHeight = expanded ? 480 : activeRoute ? 280 : 180;
+	const sheetHeight = expanded ? 520 : activeRoute ? 330 : 180;
 	const center = useMemo<LatLon>(
 		() => originCoords || [-6.9667, 110.4167],
 		[originCoords],
@@ -321,7 +398,7 @@ export default function Navigation() {
 				<div
 					className="flex h-full w-full flex-col overflow-y-auto bg-white no-scrollbar"
 					onPaste={handleHeaderPaste}>
-					<div className="flex items-center gap-3 px-6 pt-4 pb-2">
+					<div className="flex items-center gap-3 px-5 pt-4 pb-2">
 						<button
 							onClick={() => {
 								setOriginCoords(null);
@@ -339,7 +416,22 @@ export default function Navigation() {
 						</h1>
 					</div>
 
-					<div className="mx-6 mt-3 rounded-2xl border border-slate-200/80 bg-slate-50/50 px-4 py-2.5 shadow-sm transition-all focus-within:border-blue-500 focus-within:bg-white">
+					{health && (
+						<div className="mx-5 mt-2 flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1.5 text-[11px] font-semibold text-slate-500">
+							<span
+								className={`h-2 w-2 shrink-0 rounded-full ${
+									health.online ? "bg-emerald-500" : "bg-red-500"
+								}`}
+							/>
+							<span className="truncate">
+								{health.online
+									? "Semarang Vision AI online"
+									: `Semarang Vision AI offline · ${health.message}`}
+							</span>
+						</div>
+					)}
+
+					<div className="mx-5 mt-3 rounded-2xl border border-slate-200/80 bg-slate-50/50 px-4 py-2.5 shadow-sm transition-all focus-within:border-blue-500 focus-within:bg-white">
 						<div className="flex items-center gap-3.5">
 							<div className="flex w-4 shrink-0 flex-col items-center justify-center gap-0.5">
 								<Target size={16} className="text-blue-600" />
@@ -371,7 +463,7 @@ export default function Navigation() {
 						</div>
 					</div>
 
-					<div className="mx-6 mt-4 flex items-center gap-2">
+					<div className="mx-5 mt-4 flex items-center gap-2">
 						<button
 							onClick={handleSelectOnMap}
 							className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition-all hover:bg-slate-50 active:scale-95">
@@ -390,21 +482,37 @@ export default function Navigation() {
 					</div>
 
 					{error && (
-						<p className="mt-3 px-6 text-center text-xs font-semibold text-red-500">
-							{error}
-						</p>
+						<div className="mt-3 px-5">
+							<p className="text-center text-xs font-semibold text-red-500">
+								{error}
+							</p>
+							{errorDetail && (
+								<p className="mt-1 text-center text-[10px] leading-snug text-slate-400">
+									{errorDetail}
+								</p>
+							)}
+							<div className="mt-2 flex justify-center">
+								<button
+									onClick={() => setReloadKey((key) => key + 1)}
+									className="rounded-full border border-slate-200 bg-white px-4 py-1.5 text-[11px] font-bold text-slate-700 shadow-sm transition-all hover:bg-slate-50 active:scale-95">
+									Coba lagi
+								</button>
+							</div>
+						</div>
 					)}
 
 					{loading && (
 						<div className="mt-6 flex items-center justify-center gap-2 text-slate-500">
 							<LoaderCircle size={20} className="animate-spin text-blue-600" />
-							<span className="text-sm font-semibold">Menghitung rute teraman...</span>
+							<span className="text-sm font-semibold">
+								Menganalisis CCTV & menghitung rute teraman...
+							</span>
 						</div>
 					)}
 
-					<hr className="my-5 border-slate-100" />
+					<hr className="mx-5 my-5 border-slate-100" />
 
-					<div className="flex-1 px-6 pb-6">
+					<div className="flex-1 px-5 pb-6">
 						<p className="mb-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">
 							Riwayat & Rekomendasi
 						</p>
@@ -443,8 +551,15 @@ export default function Navigation() {
 
 			{screenState === "route" && (
 				<div className="relative flex h-full w-full flex-col">
-					<div className="absolute top-3 left-4 right-4 z-[1000] flex flex-col gap-2">
-						<div className="rounded-2xl border border-white/80 bg-white/90 p-3 shadow-lg backdrop-blur-md">
+					<div className="absolute top-3 left-5 right-5 z-[1000] flex items-start gap-2">
+						<button
+							onClick={() => setScreenState("search")}
+							aria-label="Kembali ke pencarian"
+							className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/80 bg-white/90 text-slate-800 shadow-md backdrop-blur-md transition-transform active:scale-95">
+							<ArrowLeft size={18} />
+						</button>
+
+						<div className="min-w-0 flex-1 rounded-2xl border border-white/80 bg-white/90 p-3 shadow-lg backdrop-blur-md">
 							<div className="flex items-center justify-between gap-3">
 								<div className="flex flex-1 items-center gap-3 min-w-0">
 									<div className="flex w-4 shrink-0 flex-col items-center justify-center gap-0.5">
@@ -472,12 +587,6 @@ export default function Navigation() {
 								</button>
 							</div>
 						</div>
-
-						<button
-							onClick={() => setScreenState("search")}
-							className="flex h-10 w-10 items-center justify-center rounded-full border border-white/80 bg-white/90 text-slate-800 shadow-md backdrop-blur-md transition-transform active:scale-95">
-							<ArrowLeft size={18} />
-						</button>
 					</div>
 
 					<div className="relative z-0 h-full w-full">
@@ -488,8 +597,9 @@ export default function Navigation() {
 							scrollWheelZoom={true}
 							className="h-full w-full">
 							<TileLayer
-								attribution="&copy; CARTO"
-								url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+								attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+								url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+								maxZoom={19}
 							/>
 
 							{(currentLocation || originCoords) && (
@@ -497,6 +607,48 @@ export default function Navigation() {
 							)}
 
 							{destCoords && <Marker position={destCoords} icon={destinationIcon} />}
+
+							{activeRoute?.anomalies.map((anomaly, i) => {
+								const streamUrl = anomaly.stream_url;
+								return (
+									<CircleMarker
+										key={`${anomaly.name}-${anomaly.anomaly_type}-${i}`}
+										center={[anomaly.latitude, anomaly.longitude]}
+										radius={9}
+										pathOptions={{
+											color: "#ffffff",
+											weight: 2,
+											fillColor: ANOMALY_COLORS[anomaly.anomaly_type] ?? "#F59E0B",
+											fillOpacity: 0.95,
+										}}>
+										<Popup>
+											<div className="min-w-[160px] text-slate-800">
+												<p className="text-[13px] font-extrabold">{anomaly.label}</p>
+												<p className="text-[11px] text-slate-500">
+													CCTV {anomaly.name}
+												</p>
+												<p className="mt-0.5 text-[11px] text-slate-500">
+													Keyakinan {(anomaly.confidence * 100).toFixed(0)}% ·{" "}
+													{anomaly.count} deteksi
+												</p>
+												{streamUrl && (
+													<button
+														onClick={() =>
+															setActiveCctv({
+																name: anomaly.name,
+																url: streamUrl,
+																label: anomaly.label,
+															})
+														}
+														className="mt-2 inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1.5 text-[11px] font-bold text-white shadow-sm active:scale-95">
+														<Video size={12} /> Lihat CCTV
+													</button>
+												)}
+											</div>
+										</Popup>
+									</CircleMarker>
+								);
+							})}
 
 							{passedPoints.length > 1 && (
 								<Polyline
@@ -536,34 +688,56 @@ export default function Navigation() {
 							<div className="h-1.5 w-12 rounded-full bg-slate-300" />
 						</button>
 
-						<div className="flex flex-1 flex-col justify-between overflow-hidden px-5 pb-5">
-							<div className="flex flex-col overflow-hidden">
-								{/* 1. HEADER RINGKASAN RUTE (YANG SEBELUMNYA HILANG) */}
-								{activeRoute && (
-									<div className="mb-2.5">
-										<div className="flex items-center justify-between">
-											<div className="flex items-baseline gap-2">
-												<span className="text-2xl font-extrabold tracking-tight text-slate-900">
-													{Math.round(activeRoute.travel_time_in_seconds / 60)} mnt
-												</span>
-												<span className="text-xs font-semibold text-slate-400">
-													({(activeRoute.length_in_meters / 1000).toFixed(1)} km)
-												</span>
-											</div>
-
-											{activeRoute.floods.length === 0 ? (
-												<span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-700">
-													<ShieldCheck size={14} /> Bebas Anomali
-												</span>
-											) : (
-												<span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-extrabold text-amber-800">
-													<AlertTriangle size={14} /> {activeRoute.floods.length} Titik
-													Banjir
-												</span>
-											)}
+						<div className="flex min-h-0 flex-1 flex-col overflow-hidden px-5 pb-4">
+							<div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+							{/* 1. HEADER RINGKASAN RUTE */}
+							{activeRoute && (
+								<div className="mb-2.5">
+									<div className="flex items-center justify-between gap-2">
+										<div className="flex items-baseline gap-2">
+											<span className="text-2xl font-extrabold tracking-tight text-slate-900">
+												{Math.round(activeRoute.travel_time_in_seconds / 60)} mnt
+											</span>
+											<span className="text-xs font-semibold text-slate-400">
+												({(activeRoute.length_in_meters / 1000).toFixed(1)} km)
+											</span>
 										</div>
+
+										{activeRoute.risk === "safe" ? (
+											<span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-700">
+												<ShieldCheck size={14} /> Bebas Anomali
+											</span>
+										) : activeRoute.risk === "caution" ? (
+											<span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-extrabold text-amber-800">
+												<AlertTriangle size={14} /> {activeRoute.anomaly_count} Anomali
+											</span>
+										) : (
+											<span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-3 py-1 text-xs font-extrabold text-red-700">
+												<AlertTriangle size={14} /> Waspada
+											</span>
+										)}
 									</div>
-								)}
+
+									<div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-slate-500">
+										<span className="rounded-full bg-slate-100 px-2 py-0.5 font-bold text-slate-600">
+											Skor {activeRoute.score.toFixed(0)}/100
+										</span>
+										{activeRoute.traffic_delay_in_seconds >= 60 && (
+											<span className="rounded-full bg-amber-50 px-2 py-0.5 font-bold text-amber-700">
+												+{Math.round(activeRoute.traffic_delay_in_seconds / 60)} mnt macet
+											</span>
+										)}
+										<span
+											className={`rounded-full px-2 py-0.5 font-bold ${
+												activeRoute.anomaly_count === 0
+													? "bg-emerald-50 text-emerald-700"
+													: "bg-amber-50 text-amber-700"
+											}`}>
+											{activeRoute.anomaly_summary}
+										</span>
+									</div>
+								</div>
+							)}
 
 								{/* 2. KARTU BIRU PETUNJUK SELANJUTNYA (Diletakkan di atas Tab) */}
 								{activeRoute && activeRoute.guidance?.[currentGuidanceIndex] && (
@@ -620,91 +794,101 @@ export default function Navigation() {
 								</div>
 
 								{/* 4. DAFTAR KONTEN TAB */}
-								<div
-									className="overflow-y-auto pr-1 no-scrollbar mt-1"
-									style={{ maxHeight: sheetHeight - 220 }}>
+								<div className="mt-1 min-h-0 flex-1 overflow-y-auto pr-1 no-scrollbar">
 									{/* TAB 1: PILIHAN RUTE */}
 									{activeTab === "routes" &&
 										routeData &&
 										routeData.routes.length > 0 && (
-											<div className="space-y-2">
+										<div className="space-y-2">
+											<div className="flex items-center justify-between gap-2">
 												<p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
 													Rekomendasi Jalur
 												</p>
-												<div className="flex flex-col gap-2">
-													{routeData.routes.map((r) => {
-														const isSelected = r.index === selectedIndex;
-														const isSafe = r.floods.length === 0;
-
-														return (
-															<div
-																key={r.index}
-																onClick={() => setSelectedIndex(r.index)}
-																className={`flex cursor-pointer items-center justify-between rounded-xl border p-3 transition-all active:scale-[0.99] ${
-																	isSelected
-																		? "border-blue-600 bg-blue-50/40 shadow-sm"
-																		: "border-slate-200 bg-white hover:border-slate-300"
-																}`}>
-																<div>
-																	<div className="flex items-center gap-2">
-																		<span className="text-sm font-bold text-slate-900">
-																			{Math.round(r.travel_time_in_seconds / 60)} mnt
-																		</span>
-																		{isSafe && (
-																			<span className="text-[10px] font-extrabold text-blue-600 uppercase tracking-wide">
-																				• Rute Teraman
-																			</span>
-																		)}
-																	</div>
-																	<span className="text-xs font-medium text-slate-400">
-																		{(r.length_in_meters / 1000).toFixed(1)} km
-																	</span>
-																</div>
-
-																<div className="flex items-center gap-2">
-																	{r.floods.length > 0 && r.floods[0].stream_url ? (
-																		// KONDISI ANOMALY: styling amber, warning
-																		<button
-																			onClick={(e) => {
-																				e.stopPropagation();
-																				setActiveCctv({
-																					name: r.floods[0].name,
-																					url: r.floods[0].stream_url!,
-																				});
-																			}}
-																			className="inline-flex items-center gap-1 rounded-lg border border-amber-400 bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-700 shadow-sm transition-colors hover:bg-amber-100 active:scale-95">
-																			<Video size={12} /> CCTV
-																		</button>
-																	) : r.nearest_cctv ? (
-																		// KONDISI NORMAL: kamera tetap ada, styling netral biru
-																		<button
-																			onClick={(e) => {
-																				e.stopPropagation();
-																				setActiveCctv({
-																					name: r.nearest_cctv!.name,
-																					url: r.nearest_cctv!.stream_url,
-																				});
-																			}}
-																			className="inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-blue-50 px-2 py-1 text-[11px] font-bold text-blue-700 shadow-sm transition-colors hover:bg-blue-100 active:scale-95">
-																			<Video size={12} /> Lihat CCTV
-																		</button>
-																	) : null}
-
-																	<span
-																		className={`rounded-lg px-2 py-1 text-[11px] font-bold ${
-																			isSafe
-																				? "bg-emerald-100 text-emerald-700"
-																				: "bg-amber-100 text-amber-800"
-																		}`}>
-																		{isSafe ? "Aman" : `${r.floods.length} Banjir`}
-																	</span>
-																</div>
-															</div>
-														);
-													})}
-												</div>
+												{routeData.threshold_m > 0 && (
+													<p className="text-[10px] font-semibold text-slate-400">
+														Radius deteksi {routeData.threshold_m} m
+													</p>
+												)}
 											</div>
-										)}
+											<div className="flex flex-col gap-2">
+												{routeData.routes.map((r) => {
+													const isSelected = r.index === selectedIndex;
+													const cctv = r.cctv;
+
+													return (
+														<div
+															key={r.index}
+															onClick={() => setSelectedIndex(r.index)}
+															className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border p-3 transition-all active:scale-[0.99] ${
+																isSelected
+																	? "border-blue-600 bg-blue-50/40 shadow-sm"
+																	: "border-slate-200 bg-white hover:border-slate-300"
+															}`}>
+															<div className="min-w-0">
+																<div className="flex flex-wrap items-center gap-1.5">
+																	<span className="text-sm font-bold text-slate-900">
+																		{Math.round(r.travel_time_in_seconds / 60)} mnt
+																	</span>
+																	{r.tags.map((tag) => (
+																		<span
+																			key={tag}
+																			className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-blue-600">
+																			{tag}
+																		</span>
+																	))}
+																</div>
+																<p className="mt-0.5 truncate text-xs font-medium text-slate-400">
+																	{r.summary} · {(r.length_in_meters / 1000).toFixed(1)} km
+																</p>
+																<p
+																	className={`mt-0.5 truncate text-[11px] font-bold ${
+																		r.risk === "safe" ? "text-emerald-600" : "text-amber-700"
+																	}`}>
+																	Skor {r.score.toFixed(0)} · {r.anomaly_summary}
+																</p>
+															</div>
+
+															<div className="flex shrink-0 items-center gap-2">
+																{cctv ? (
+																	<button
+																		onClick={(e) => {
+																			e.stopPropagation();
+																			setActiveCctv({
+																				name: cctv.name,
+																				url: cctv.url,
+																				label: cctv.label,
+																			});
+																		}}
+																		className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-bold shadow-sm transition-colors active:scale-95 ${
+																			r.risk === "safe"
+																				? "border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100"
+																				: "border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100"
+																		}`}>
+																		<Video size={12} /> CCTV
+																	</button>
+																) : null}
+
+																<span
+																	className={`rounded-lg px-2 py-1 text-[11px] font-bold ${
+																		r.risk === "safe"
+																			? "bg-emerald-100 text-emerald-700"
+																			: r.risk === "caution"
+																				? "bg-amber-100 text-amber-800"
+																				: "bg-red-100 text-red-700"
+																	}`}>
+																	{r.risk === "safe"
+																		? "Aman"
+																		: r.risk === "caution"
+																			? `${r.anomaly_count} Anomali`
+																			: "Waspada"}
+																</span>
+															</div>
+														</div>
+													);
+												})}
+											</div>
+										</div>
+									)}
 
 									{/* TAB 2: TIMELINE PETUNJUK ARAH */}
 									{activeTab === "instructions" && (
@@ -779,6 +963,7 @@ export default function Navigation() {
 			{activeCctv && (
 				<CctvModal
 					name={activeCctv.name}
+					subtitle={activeCctv.label}
 					streamUrl={activeCctv.url}
 					onClose={() => setActiveCctv(null)}
 				/>

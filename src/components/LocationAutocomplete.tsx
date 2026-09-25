@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, type LucideIcon, Search } from "lucide-react";
+import type { LatLon } from "../lib/visionApi";
 
-export type LatLon = [number, number];
+export type { LatLon };
 
 interface PhotonFeature {
 	geometry: { coordinates: [number, number] }; // [lng, lat]
@@ -118,6 +119,16 @@ export default function LocationAutocomplete({
 	const [invalid, setInvalid] = useState(false);
 	const [resolvedCoords, setResolvedCoords] = useState<LatLon | null>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
+	const onSelectRef = useRef(onSelect);
+	const resolvedRef = useRef<LatLon | null>(resolvedCoords);
+
+	useEffect(() => {
+		onSelectRef.current = onSelect;
+	}, [onSelect]);
+
+	useEffect(() => {
+		resolvedRef.current = resolvedCoords;
+	}, [resolvedCoords]);
 
 	useEffect(() => {
 		if (!externalValue) return;
@@ -142,13 +153,12 @@ export default function LocationAutocomplete({
 			setSuggestions([]);
 			setOpen(false);
 			setInvalid(false);
+			const current = resolvedRef.current;
 			const same =
-				resolvedCoords &&
-				resolvedCoords[0] === coordPair[0] &&
-				resolvedCoords[1] === coordPair[1];
+				current && current[0] === coordPair[0] && current[1] === coordPair[1];
 			if (!same) {
 				setResolvedCoords(coordPair);
-				onSelect(coordPair);
+				onSelectRef.current(coordPair);
 			}
 			return;
 		}
